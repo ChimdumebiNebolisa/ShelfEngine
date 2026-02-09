@@ -4,6 +4,25 @@ Turn your bookmarks into a search engine.
 
 ShelfEngine is a **local-first web app** that lets you import your browser bookmarks once and later retrieve them using natural-language queries, search, and filters. All data stays on your device by default.
 
+## Prerequisites
+
+- **Node.js** 18+ (for local development)
+- A modern browser (Chrome, Edge, Firefox, or Safari) for the PWA
+
+## How to use
+
+1. Run the app (`npm run dev`), then open it in your browser.
+2. **Import** your bookmarks: upload a `bookmarks.html` file (see below).
+3. Use **Search** (keyword + filters) or **Chat** (natural-language queries) to find links.
+
+**Getting `bookmarks.html` (Chrome):** Open Bookmark Manager (`Ctrl+Shift+O` / `Cmd+Shift+O`), click the ⋮ menu, then **Export bookmarks**. Save the file and upload it in ShelfEngine’s Import page.
+
+## Screenshot
+
+![ShelfEngine](screenshot.png)
+
+*(Add a screenshot of the app here; save it as `screenshot.png` in the repo root.)*
+
 ## Architecture
 
 ```mermaid
@@ -110,3 +129,7 @@ npm run build:extension
 In Chrome, go to `chrome://extensions`, enable "Developer mode", click "Load unpacked", and select the `extension` folder. The extension only runs on `localhost` and `127.0.0.1`; when the ShelfEngine app is open in a tab, bookmark changes in Chrome are synced into the app within a few seconds. When the app is closed, deltas are queued and applied on next open.
 
 See [MILESTONES.md](MILESTONES.md) for the full implementation plan and dependency order.
+
+## License
+
+MIT. See [LICENSE](LICENSE) for details.
