@@ -21,6 +21,12 @@ export default function Layout({ children }: LayoutProps) {
             Search
           </Link>
           <Link
+            to="/chat"
+            style={{ ...styles.navLink, ...(isActive('/chat') ? styles.navLinkActive : {}) }}
+          >
+            Chat
+          </Link>
+          <Link
             to="/import"
             style={{ ...styles.navLink, ...(isActive('/import') ? styles.navLinkActive : {}) }}
           >

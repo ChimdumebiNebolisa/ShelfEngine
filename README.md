@@ -99,4 +99,14 @@ Build for production:
 npm run build
 ```
 
+### Chrome extension (optional sync)
+
+Build the extension, then load it in Chrome as an unpacked extension:
+
+```bash
+npm run build:extension
+```
+
+In Chrome, go to `chrome://extensions`, enable "Developer mode", click "Load unpacked", and select the `extension` folder. The extension only runs on `localhost` and `127.0.0.1`; when the ShelfEngine app is open in a tab, bookmark changes in Chrome are synced into the app within a few seconds. When the app is closed, deltas are queued and applied on next open.
+
 See [MILESTONES.md](MILESTONES.md) for the full implementation plan and dependency order.

@@ -115,6 +115,40 @@ export async function embedQuery(text: string): Promise<number[]> {
 }
 
 /**
+ * Embed a single bookmark and save to the embeddings store. Used by sync/ingest when a bookmark is upserted.
+ */
+export async function embedSingleBookmark(bookmark: Bookmark & { id: number }): Promise<void> {
+  const worker = new Worker(new URL('../workers/embedding.worker.ts', import.meta.url), { type: 'module' });
+  try {
+    const text = embeddingText(bookmark);
+    const result = await new Promise<number[]>((resolve, reject) => {
+      const handler = (e: MessageEvent) => {
+        const d = e.data as { type: string; vectors?: number[][]; message?: string };
+        if (d.type === 'result' && d.vectors?.[0]) {
+          worker.removeEventListener('message', handler);
+          resolve(d.vectors[0]);
+        } else if (d.type === 'error') {
+          worker.removeEventListener('message', handler);
+          reject(new Error(d.message ?? 'Embedding failed'));
+        }
+      };
+      worker.addEventListener('message', handler);
+      worker.postMessage({ type: 'embed', texts: [text] });
+    });
+    const now = Date.now();
+    await db.embeddings.where('bookmarkId').equals(bookmark.id).delete();
+    await db.embeddings.add({
+      bookmarkId: bookmark.id,
+      vector: result,
+      modelName: MODEL_NAME,
+      createdAt: now,
+    });
+  } finally {
+    worker.terminate();
+  }
+}
+
+/**
  * Count of bookmarks that have embeddings. Used to show "run one query" or index status.
  */
 export async function getEmbeddingStats(): Promise<{ total: number; withEmbedding: number }> {

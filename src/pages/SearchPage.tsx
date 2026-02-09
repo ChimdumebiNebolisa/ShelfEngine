@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getEmbeddingStats } from '../embeddings/embeddingService';
 import { search, getFilterOptions } from '../search/searchService';
 import type { SearchFilters, SearchResult } from '../search/searchService';
+import SearchResultCard from '../components/SearchResultCard';
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
@@ -117,24 +118,7 @@ export default function SearchPage() {
       {results.length > 0 && (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {results.map((r) => (
-            <li key={r.bookmark.id} style={cardStyle}>
-              <a href={r.bookmark.url} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600, color: '#7eb8da' }}>
-                {r.bookmark.title || r.bookmark.url}
-              </a>
-              <div style={{ fontSize: '0.85rem', color: '#a0a0b0', marginTop: '0.25rem' }}>
-                <a href={r.bookmark.url} target="_blank" rel="noopener noreferrer" style={{ color: '#8a8aa0', wordBreak: 'break-all' }}>
-                  {r.bookmark.url}
-                </a>
-              </div>
-              {r.bookmark.folderPath && (
-                <div style={{ fontSize: '0.8rem', color: '#808090', marginTop: '0.2rem' }}>
-                  {r.bookmark.folderPath}
-                </div>
-              )}
-              <div style={{ fontSize: '0.8rem', color: '#9ab8c8', marginTop: '0.35rem' }}>
-                {r.whyMatched}
-              </div>
-            </li>
+            <SearchResultCard key={r.bookmark.id} result={r} />
           ))}
         </ul>
       )}
@@ -181,12 +165,4 @@ const buttonStyle: React.CSSProperties = {
   backgroundColor: '#2d4a6a',
   color: '#eaeaea',
   cursor: 'pointer',
-};
-
-const cardStyle: React.CSSProperties = {
-  padding: '1rem',
-  marginBottom: '0.75rem',
-  border: '1px solid #2d2d44',
-  borderRadius: 4,
-  backgroundColor: 'rgba(255,255,255,0.03)',
 };
