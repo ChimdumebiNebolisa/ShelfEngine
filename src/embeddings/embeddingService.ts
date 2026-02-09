@@ -87,65 +87,101 @@ export async function buildIndex(onProgress?: (p: IndexingProgress) => void): Pr
   }
 }
 
+// Long-lived worker and queue for query/single-bookmark embedding (not used by buildIndex).
+const QUERY_CACHE_MAX = 50;
+const queryCache = new Map<string, number[]>();
+const queryCacheOrder: string[] = [];
+
+function cacheGet(key: string): number[] | undefined {
+  return queryCache.get(key);
+}
+
+function cacheSet(key: string, vector: number[]): void {
+  if (queryCache.size >= QUERY_CACHE_MAX && queryCacheOrder.length > 0) {
+    const oldest = queryCacheOrder.shift();
+    if (oldest != null) queryCache.delete(oldest);
+  }
+  if (!queryCache.has(key)) queryCacheOrder.push(key);
+  queryCache.set(key, vector);
+}
+
+interface QueueItem {
+  texts: string[];
+  resolve: (vectors: number[][]) => void;
+  reject: (err: Error) => void;
+}
+
+let queryWorker: Worker | null = null;
+let queryQueue: QueueItem[] = [];
+let queryWorkerBusy = false;
+
+function getQueryWorker(): Worker {
+  if (queryWorker == null) {
+    queryWorker = new Worker(new URL('../workers/embedding.worker.ts', import.meta.url), { type: 'module' });
+  }
+  return queryWorker;
+}
+
+function processQueryQueue(): void {
+  if (queryWorkerBusy || queryQueue.length === 0) return;
+  const item = queryQueue.shift();
+  if (!item) return;
+  queryWorkerBusy = true;
+  const worker = getQueryWorker();
+  const handler = (e: MessageEvent) => {
+    const d = e.data as { type: string; vectors?: number[][]; message?: string };
+    if (d.type === 'result' && d.vectors) {
+      worker.removeEventListener('message', handler);
+      queryWorkerBusy = false;
+      item.resolve(d.vectors);
+      processQueryQueue();
+    } else if (d.type === 'error') {
+      worker.removeEventListener('message', handler);
+      queryWorkerBusy = false;
+      item.reject(new Error(d.message ?? 'Embedding failed'));
+      processQueryQueue();
+    }
+  };
+  worker.addEventListener('message', handler);
+  worker.postMessage({ type: 'embed', texts: item.texts });
+}
+
+function embedViaWorker(texts: string[]): Promise<number[][]> {
+  return new Promise((resolve, reject) => {
+    queryQueue.push({ texts, resolve, reject });
+    processQueryQueue();
+  });
+}
+
 /**
  * Embed a single string (e.g. search query) in a worker. Returns one vector.
- * Used by search to get query vector for cosine similarity.
+ * Uses a long-lived worker and a small cache for repeated queries.
  */
 export async function embedQuery(text: string): Promise<number[]> {
-  const worker = new Worker(new URL('../workers/embedding.worker.ts', import.meta.url), { type: 'module' });
-  try {
-    const result = await new Promise<number[]>((resolve, reject) => {
-      const handler = (e: MessageEvent) => {
-        const d = e.data as { type: string; vectors?: number[][]; message?: string };
-        if (d.type === 'result' && d.vectors?.[0]) {
-          worker.removeEventListener('message', handler);
-          resolve(d.vectors[0]);
-        } else if (d.type === 'error') {
-          worker.removeEventListener('message', handler);
-          reject(new Error(d.message ?? 'Embedding failed'));
-        }
-      };
-      worker.addEventListener('message', handler);
-      worker.postMessage({ type: 'embed', texts: [text] });
-    });
-    return result;
-  } finally {
-    worker.terminate();
-  }
+  const key = text.trim().toLowerCase() || ' ';
+  const cached = cacheGet(key);
+  if (cached != null) return cached;
+  const toEmbed = text.trim() || ' ';
+  const [vectors] = await embedViaWorker([toEmbed]);
+  cacheSet(key, vectors);
+  return vectors;
 }
 
 /**
  * Embed a single bookmark and save to the embeddings store. Used by sync/ingest when a bookmark is upserted.
+ * Uses the same long-lived query worker queue as embedQuery.
  */
 export async function embedSingleBookmark(bookmark: Bookmark & { id: number }): Promise<void> {
-  const worker = new Worker(new URL('../workers/embedding.worker.ts', import.meta.url), { type: 'module' });
-  try {
-    const text = embeddingText(bookmark);
-    const result = await new Promise<number[]>((resolve, reject) => {
-      const handler = (e: MessageEvent) => {
-        const d = e.data as { type: string; vectors?: number[][]; message?: string };
-        if (d.type === 'result' && d.vectors?.[0]) {
-          worker.removeEventListener('message', handler);
-          resolve(d.vectors[0]);
-        } else if (d.type === 'error') {
-          worker.removeEventListener('message', handler);
-          reject(new Error(d.message ?? 'Embedding failed'));
-        }
-      };
-      worker.addEventListener('message', handler);
-      worker.postMessage({ type: 'embed', texts: [text] });
-    });
-    const now = Date.now();
-    await db.embeddings.where('bookmarkId').equals(bookmark.id).delete();
-    await db.embeddings.add({
-      bookmarkId: bookmark.id,
-      vector: result,
-      modelName: MODEL_NAME,
-      createdAt: now,
-    });
-  } finally {
-    worker.terminate();
-  }
+  const text = embeddingText(bookmark);
+  const [result] = await embedViaWorker([text]);
+  const now = Date.now();
+  await db.embeddings.where('bookmarkId').equals(bookmark.id).delete();
+  await db.embeddings.add({
+    bookmarkId: bookmark.id,
+    vector: result,
+    modelName: MODEL_NAME,
+    createdAt: now,
+  });
 }
 
 /**

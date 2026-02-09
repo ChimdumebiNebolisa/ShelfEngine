@@ -21,28 +21,76 @@ export interface SearchResult {
   bookmark: Bookmark;
   score: number;
   whyMatched: string;
+  matchedTerms?: string[];
 }
 
-function applyFilters(
-  bookmarks: Bookmark[],
-  filters: SearchFilters
-): Bookmark[] {
-  let out = bookmarks;
+function hasAnyFilter(filters: SearchFilters): boolean {
+  return (
+    (filters.folder != null && filters.folder !== '') ||
+    (filters.domain != null && filters.domain !== '') ||
+    (filters.dateRange != null && filters.dateRange !== 'any')
+  );
+}
+
+function dateCut(filters: SearchFilters): number | null {
+  if (filters.dateRange == null || filters.dateRange === 'any') return null;
+  const now = Math.floor(Date.now() / 1000);
+  return filters.dateRange === '7d' ? now - 7 * 24 * 3600 : now - 30 * 24 * 3600;
+}
+
+/**
+ * Load bookmarks and embeddings. When filters are set, use Dexie indexed queries
+ * so only matching rows are read; otherwise load all.
+ */
+async function loadBookmarksAndEmbeddings(filters: SearchFilters): Promise<{
+  bookmarks: Bookmark[];
+  embeddings: { bookmarkId: number; vector: number[] }[];
+}> {
+  if (!hasAnyFilter(filters)) {
+    const [bookmarks, embeddings] = await Promise.all([
+      db.bookmarks.toArray(),
+      db.embeddings.toArray(),
+    ]);
+    return {
+      bookmarks,
+      embeddings: embeddings.map((e) => ({ bookmarkId: e.bookmarkId, vector: e.vector })),
+    };
+  }
+
+  let bookmarks: Bookmark[];
+  if (filters.folder != null && filters.folder !== '') {
+    bookmarks = await db.bookmarks.where('folderPath').equals(filters.folder).toArray();
+  } else if (filters.domain != null && filters.domain !== '') {
+    bookmarks = await db.bookmarks.where('domain').equals(filters.domain).toArray();
+  } else {
+    const cut = dateCut(filters);
+    bookmarks = cut != null
+      ? (await db.bookmarks.where('addDate').aboveOrEqual(cut).toArray()).filter(
+          (b): b is Bookmark => b.addDate != null
+        )
+      : await db.bookmarks.toArray();
+  }
 
   if (filters.folder != null && filters.folder !== '') {
-    out = out.filter((b) => b.folderPath === filters.folder);
+    bookmarks = bookmarks.filter((b) => b.folderPath === filters.folder);
   }
   if (filters.domain != null && filters.domain !== '') {
-    out = out.filter((b) => b.domain === filters.domain);
+    bookmarks = bookmarks.filter((b) => b.domain === filters.domain);
   }
-  if (filters.dateRange != null && filters.dateRange !== 'any') {
-    const now = Math.floor(Date.now() / 1000);
-    const cut =
-      filters.dateRange === '7d' ? now - 7 * 24 * 3600 : now - 30 * 24 * 3600;
-    out = out.filter((b) => b.addDate != null && b.addDate >= cut);
+  const cut = dateCut(filters);
+  if (cut != null) {
+    bookmarks = bookmarks.filter((b) => b.addDate != null && b.addDate >= cut);
   }
 
-  return out;
+  const ids = bookmarks.map((b) => b.id).filter((id): id is number => id != null);
+  const embeddingsRaw =
+    ids.length > 0
+      ? await db.embeddings.where('bookmarkId').anyOf(ids).toArray()
+      : [];
+  return {
+    bookmarks,
+    embeddings: embeddingsRaw.map((e) => ({ bookmarkId: e.bookmarkId, vector: e.vector })),
+  };
 }
 
 function formatMatchedIn(m: MatchedIn): string {
@@ -50,21 +98,15 @@ function formatMatchedIn(m: MatchedIn): string {
   return m;
 }
 
-function buildWhyMatched(
-  keywordHit: KeywordHit | undefined,
-  similarity: number
-): string {
-  const simStr = similarity.toFixed(2);
-  if (keywordHit && keywordHit.matchedTerms.length > 0) {
-    const terms = keywordHit.matchedTerms.map((t) => `"${t}"`).join(', ');
-    const where =
-      keywordHit.matchedIn.length > 0
-        ? keywordHit.matchedIn.map(formatMatchedIn).join(', ')
-        : '';
-    const part = where ? ` in ${where}` : '';
-    return `Matched ${terms}${part} · similarity ${simStr}`;
-  }
-  return `Similarity ${simStr}`;
+function buildWhyMatched(keywordHit: KeywordHit | undefined, hasSemantic: boolean): string {
+  const keywordPart =
+    keywordHit && keywordHit.matchedTerms.length > 0
+      ? `Matches ${keywordHit.matchedTerms.map((t) => `'${t}'`).join(', ')}${keywordHit.matchedIn.length > 0 ? ` in ${keywordHit.matchedIn.map(formatMatchedIn).join(', ')}` : ''}`
+      : '';
+  const semanticPart = hasSemantic ? 'Relevant to your query' : '';
+  if (keywordPart && semanticPart) return `${keywordPart} and ${semanticPart.toLowerCase()}`;
+  if (keywordPart) return keywordPart;
+  return semanticPart || 'Relevant to your query';
 }
 
 export async function search(
@@ -74,16 +116,11 @@ export async function search(
   const trimmed = query.trim();
   if (trimmed === '') return [];
 
-  const [bookmarks, embeddings] = await Promise.all([
-    db.bookmarks.toArray(),
-    db.embeddings.toArray(),
-  ]);
-
-  const filteredBookmarks = applyFilters(bookmarks, filters);
+  const { bookmarks: filteredBookmarks, embeddings: embeddingsList } = await loadBookmarksAndEmbeddings(filters);
   const filteredIds = new Set(filteredBookmarks.map((b) => b.id).filter((id): id is number => id != null));
 
   const embeddingByBookmarkId = new Map(
-    embeddings.filter((e) => filteredIds.has(e.bookmarkId)).map((e) => [e.bookmarkId, e] as const)
+    embeddingsList.map((e) => [e.bookmarkId, e] as const)
   );
   const bookmarkById = new Map(
     filteredBookmarks.filter((b) => b.id != null).map((b) => [b.id!, b] as const)
@@ -100,8 +137,8 @@ export async function search(
       if (!b) return null;
       return {
         bookmark: b,
-        score: 1,
-        whyMatched: `Matched ${kh.matchedTerms.map((t) => `"${t}"`).join(', ')} in ${kh.matchedIn.map(formatMatchedIn).join(', ')}`,
+        score: kh.score,
+        whyMatched: buildWhyMatched(kh, false),
       };
     }).filter((r): r is SearchResult => r != null);
   }
@@ -110,35 +147,32 @@ export async function search(
   const semanticHits = semanticTopK(semanticItems, queryVector, 10);
   const keywordHits = keywordSearch(filteredBookmarks, trimmed);
   const keywordByBookmarkId = new Map(keywordHits.map((kh) => [kh.bookmarkId, kh]));
+  const semanticByBookmarkId = new Map(semanticHits.map((s) => [s.bookmarkId, s.score]));
 
-  const seen = new Set<number>();
+  const maxKeywordScore = keywordHits.length > 0
+    ? Math.max(...keywordHits.map((kh) => kh.score), 1)
+    : 1;
+  const ALPHA = 0.55;
+
+  const candidateIds = new Set<number>([
+    ...keywordHits.map((kh) => kh.bookmarkId),
+    ...semanticHits.map((s) => s.bookmarkId),
+  ]);
+
   const results: SearchResult[] = [];
-
-  for (const kh of keywordHits) {
-    if (seen.has(kh.bookmarkId)) continue;
-    const b = bookmarkById.get(kh.bookmarkId);
+  for (const bookmarkId of candidateIds) {
+    const b = bookmarkById.get(bookmarkId);
     if (!b) continue;
-    seen.add(kh.bookmarkId);
-    const sim = embeddingByBookmarkId.has(kh.bookmarkId)
-      ? semanticHits.find((s) => s.bookmarkId === kh.bookmarkId)?.score ?? 0
-      : 0;
+    const semanticScore = semanticByBookmarkId.get(bookmarkId) ?? 0;
+    const kh = keywordByBookmarkId.get(bookmarkId);
+    const rawKeyword = kh?.score ?? 0;
+    const normKeyword = Math.min(1, rawKeyword / maxKeywordScore);
+    const combined = ALPHA * semanticScore + (1 - ALPHA) * normKeyword;
     results.push({
       bookmark: b,
-      score: 1 + sim,
-      whyMatched: buildWhyMatched(kh, sim),
-    });
-  }
-
-  for (const sh of semanticHits) {
-    if (seen.has(sh.bookmarkId)) continue;
-    const b = bookmarkById.get(sh.bookmarkId);
-    if (!b) continue;
-    seen.add(sh.bookmarkId);
-    const kh = keywordByBookmarkId.get(sh.bookmarkId);
-    results.push({
-      bookmark: b,
-      score: sh.score,
-      whyMatched: buildWhyMatched(kh, sh.score),
+      score: combined,
+      whyMatched: buildWhyMatched(kh, semanticScore > 0),
+      matchedTerms: kh?.matchedTerms && kh.matchedTerms.length > 0 ? kh.matchedTerms : undefined,
     });
   }
 

@@ -49,10 +49,18 @@ function tokenizeQuery(q: string): string[] {
 
 export type MatchedIn = 'title' | 'url' | 'folderPath' | 'domain';
 
+const FIELD_WEIGHTS: Record<MatchedIn, number> = {
+  title: 2,
+  domain: 1.5,
+  folderPath: 1,
+  url: 0.8,
+};
+
 export interface KeywordHit {
   bookmarkId: number;
   matchedTerms: string[];
   matchedIn: MatchedIn[];
+  score: number;
 }
 
 export function keywordSearch(bookmarks: Bookmark[], query: string): KeywordHit[] {
@@ -71,30 +79,37 @@ export function keywordSearch(bookmarks: Bookmark[], query: string): KeywordHit[
 
     const matchedTerms: string[] = [];
     const matchedIn: MatchedIn[] = [];
+    let score = 0;
 
     for (const term of terms) {
       if (title.includes(term)) {
         if (!matchedTerms.includes(term)) matchedTerms.push(term);
         if (!matchedIn.includes('title')) matchedIn.push('title');
+        score += FIELD_WEIGHTS.title;
       }
       if (url.includes(term)) {
         if (!matchedTerms.includes(term)) matchedTerms.push(term);
         if (!matchedIn.includes('url')) matchedIn.push('url');
+        score += FIELD_WEIGHTS.url;
       }
       if (folderPath.includes(term)) {
         if (!matchedTerms.includes(term)) matchedTerms.push(term);
         if (!matchedIn.includes('folderPath')) matchedIn.push('folderPath');
+        score += FIELD_WEIGHTS.folderPath;
       }
       if (domain.includes(term)) {
         if (!matchedTerms.includes(term)) matchedTerms.push(term);
         if (!matchedIn.includes('domain')) matchedIn.push('domain');
+        score += FIELD_WEIGHTS.domain;
       }
     }
 
     if (matchedTerms.length > 0) {
-      results.push({ bookmarkId: id, matchedTerms, matchedIn });
+      const termBonus = matchedTerms.length / terms.length;
+      results.push({ bookmarkId: id, matchedTerms, matchedIn, score: score + termBonus });
     }
   }
 
+  results.sort((a, b) => b.score - a.score);
   return results;
 }

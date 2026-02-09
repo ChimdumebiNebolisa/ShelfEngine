@@ -16,6 +16,69 @@ body {
   min-height: 100vh;
 }
 
+/* Typography: main page titles */
+main h1,
+main h2 {
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+}
+main h1 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* Focus styles for keyboard users */
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #7eb8da;
+  outline-offset: 2px;
+}
+
+/* Button states: transition and hover/active/disabled */
+.btn {
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+.btn:active:not(:disabled) {
+  filter: brightness(0.9);
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Card transition and hover for result cards */
+.result-card {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  text-decoration: none;
+  color: inherit;
+}
+.result-card:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  text-decoration: none;
+}
+
+/* Inline loading spinner */
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #2d2d44;
+  border-top-color: #7eb8da;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 0.5rem;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 a {
   color: #7eb8da;
   text-decoration: none;

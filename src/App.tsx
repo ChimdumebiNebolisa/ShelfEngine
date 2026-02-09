@@ -37,8 +37,29 @@ function App() {
 
   if (dbError) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>Could not open database: {dbError}</p>
+      <div style={{ padding: '2rem', textAlign: 'center', maxWidth: 800, margin: '0 auto' }}>
+        <p style={{ marginBottom: '1rem' }}>Something went wrong opening local storage.</p>
+        <p style={{ fontSize: '0.9rem', color: '#a0a0b0', marginBottom: '1.5rem' }}>{dbError}</p>
+        <button
+          type="button"
+          className="btn"
+          style={{
+            padding: '0.5rem 1rem',
+            fontSize: '1rem',
+            border: '1px solid #3d5a80',
+            borderRadius: 4,
+            backgroundColor: '#2d4a6a',
+            color: '#eaeaea',
+            cursor: 'pointer',
+          }}
+          onClick={() => {
+            db.open()
+              .then(() => setDbError(null))
+              .catch((err) => setDbError(err?.message ?? 'Failed to open database'));
+          }}
+        >
+          Retry
+        </button>
       </div>
     );
   }

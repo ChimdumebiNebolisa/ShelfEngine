@@ -21,12 +21,8 @@ export default function ChatPage() {
     getEmbeddingStats().then(setStats);
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = input.trim();
-    if (!trimmed) return;
-    if (stats != null && stats.withEmbedding === 0) return;
-
+  async function runQuery(trimmed: string) {
+    if (!trimmed || (stats != null && stats.withEmbedding === 0)) return;
     setInput('');
     const newTurn: ChatTurn = { query: trimmed, results: null, loading: true };
     setTurns([newTurn]);
@@ -52,6 +48,13 @@ export default function ChatPage() {
     }
   }
 
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    runQuery(trimmed);
+  }
+
   const canSend = stats != null && stats.withEmbedding > 0 && input.trim() !== '';
   const sending = turns.some((t) => t.loading);
 
@@ -59,12 +62,13 @@ export default function ChatPage() {
     <div style={pageStyle}>
       <div style={stickyHeaderStyle}>
         <h1 style={{ marginTop: 0 }}>Chat</h1>
-        <p>Ask in plain language; you&apos;ll get matching bookmarks with &quot;why matched&quot; — no AI reply, retrieval only.</p>
+        <p>Ask in plain language; you&apos;ll get matching bookmarks with why it matched as well as a similarity score.</p>
 
         {stats != null && stats.total > 0 && stats.withEmbedding === 0 && (
-          <p style={{ padding: '0.75rem', backgroundColor: 'rgba(200,160,80,0.2)', borderRadius: 4 }}>
-            No index yet. <Link to="/import">Import bookmarks</Link> and click &quot;Build index&quot; first.
-          </p>
+          <div style={{ padding: '0.75rem', backgroundColor: 'rgba(200,160,80,0.2)', borderRadius: 4 }}>
+            <p style={{ margin: '0 0 0.5rem 0' }}>No index yet. Import bookmarks and click &quot;Build index&quot; first.</p>
+            <Link to="/import" className="btn" style={{ ...buttonStyle, display: 'inline-block', textDecoration: 'none' }}>Go to Import</Link>
+          </div>
         )}
 
         <form onSubmit={handleSubmit} style={{ marginTop: '1rem' }}>
@@ -73,11 +77,11 @@ export default function ChatPage() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="e.g. that article about React hooks..."
+              placeholder={stats != null && stats.withEmbedding > 0 ? 'e.g. that article about React hooks...' : 'Build index on Import to enable search'}
               disabled={!(stats != null && stats.withEmbedding > 0)}
-              style={inputStyle}
+              style={stats != null && stats.withEmbedding > 0 ? inputStyle : { ...inputStyle, backgroundColor: '#1e1e2e' }}
             />
-            <button type="submit" disabled={!canSend || sending} style={buttonStyle}>
+            <button type="submit" disabled={!canSend || sending} className="btn" style={buttonStyle}>
               {sending ? '…' : 'Send'}
             </button>
           </div>
@@ -85,21 +89,49 @@ export default function ChatPage() {
       </div>
 
       <div style={turnsAreaStyle}>
+        {turns.length === 0 && stats != null && stats.withEmbedding > 0 && (
+          <div style={emptyStateStyle}>
+            <p style={{ margin: '0 0 0.75rem 0', color: '#a0a0b0' }}>Ask in plain language. You&apos;ll get matching bookmarks with why it matched and a similarity score.</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {['that article about React hooks', 'tutorials I saved'].map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  className="btn"
+                  style={chipStyle}
+                  onClick={() => runQuery(example)}
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {turns.map((turn, i) => (
           <div key={i} style={turnBlockStyle}>
-            <div style={userBubbleStyle}>{turn.query}</div>
-            {turn.loading && <div style={metaStyle}>Searching…</div>}
+            <div style={userBubbleWrapStyle}>
+              <div style={userBubbleStyle}>{turn.query}</div>
+            </div>
+            {turn.loading && (
+              <div style={metaStyle}>
+                <span className="spinner" aria-hidden />
+                Searching…
+              </div>
+            )}
             {turn.error && <div style={errorStyle}>{turn.error}</div>}
             {!turn.loading && turn.results !== null && (
               <>
                 {turn.results.length === 0 ? (
                   <div style={metaStyle}>No bookmarks match your query.</div>
                 ) : (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                    {turn.results.map((r) => (
-                      <SearchResultCard key={r.bookmark.id} result={r} />
-                    ))}
-                  </ul>
+                  <>
+                    <div style={{ fontSize: '0.85rem', color: '#808090', marginBottom: '0.35rem' }}>Matches</div>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {turn.results.map((r) => (
+                        <SearchResultCard key={r.bookmark.id} result={r} />
+                      ))}
+                    </ul>
+                  </>
                 )}
               </>
             )}
@@ -136,13 +168,33 @@ const turnBlockStyle: React.CSSProperties = {
   marginBottom: '1.25rem',
 };
 
+const emptyStateStyle: React.CSSProperties = {
+  padding: '1.5rem 0',
+};
+
+const chipStyle: React.CSSProperties = {
+  padding: '0.4rem 0.75rem',
+  fontSize: '0.9rem',
+  border: '1px solid #2d2d44',
+  borderRadius: 9999,
+  backgroundColor: 'rgba(255,255,255,0.06)',
+  color: '#eaeaea',
+  cursor: 'pointer',
+};
+
+const userBubbleWrapStyle: React.CSSProperties = {
+  display: 'flex',
+  marginBottom: '0.5rem',
+};
+
 const userBubbleStyle: React.CSSProperties = {
   padding: '0.5rem 0.75rem',
-  marginBottom: '0.5rem',
   borderRadius: 4,
   backgroundColor: 'rgba(126, 184, 218, 0.15)',
   borderLeft: '3px solid #7eb8da',
   maxWidth: '80%',
+  marginLeft: 'auto',
+  alignSelf: 'flex-end',
 };
 
 const metaStyle: React.CSSProperties = {
