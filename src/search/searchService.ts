@@ -44,38 +44,18 @@ function dateCut(filters: SearchFilters): number | null {
 }
 
 /**
- * Load bookmarks and embeddings. When filters are set, use Dexie indexed queries
- * so only matching rows are read; otherwise load all.
+ * Load bookmarks and embeddings. Filters are combined with AND.
  */
 async function loadBookmarksAndEmbeddings(filters: SearchFilters): Promise<{
   bookmarks: Bookmark[];
   embeddings: { bookmarkId: number; vector: number[] }[];
 }> {
-  if (!hasAnyFilter(filters)) {
-    const [bookmarks, embeddings] = await Promise.all([
-      db.bookmarks.toArray(),
-      db.embeddings.toArray(),
-    ]);
-    return {
-      bookmarks,
-      embeddings: embeddings.map((e) => ({ bookmarkId: e.bookmarkId, vector: e.vector })),
-    };
-  }
+  const [allBookmarks, embeddings] = await Promise.all([
+    db.bookmarks.toArray(),
+    db.embeddings.toArray(),
+  ]);
 
-  let bookmarks: Bookmark[];
-  if (filters.folder != null && filters.folder !== '') {
-    bookmarks = await db.bookmarks.where('folderPath').equals(filters.folder).toArray();
-  } else if (filters.domain != null && filters.domain !== '') {
-    bookmarks = await db.bookmarks.where('domain').equals(filters.domain).toArray();
-  } else {
-    const cut = dateCut(filters);
-    bookmarks = cut != null
-      ? (await db.bookmarks.where('addDate').aboveOrEqual(cut).toArray()).filter(
-          (b): b is Bookmark => b.addDate != null
-        )
-      : await db.bookmarks.toArray();
-  }
-
+  let bookmarks = allBookmarks;
   if (filters.folder != null && filters.folder !== '') {
     bookmarks = bookmarks.filter((b) => b.folderPath === filters.folder);
   }
@@ -88,13 +68,13 @@ async function loadBookmarksAndEmbeddings(filters: SearchFilters): Promise<{
   }
 
   const ids = bookmarks.map((b) => b.id).filter((id): id is number => id != null);
-  const embeddingsRaw =
+  const embeddingsFiltered =
     ids.length > 0
-      ? await db.embeddings.where('bookmarkId').anyOf(ids).toArray()
+      ? embeddings.filter((e) => ids.includes(e.bookmarkId))
       : [];
   return {
     bookmarks,
-    embeddings: embeddingsRaw.map((e) => ({ bookmarkId: e.bookmarkId, vector: e.vector })),
+    embeddings: embeddingsFiltered.map((e) => ({ bookmarkId: e.bookmarkId, vector: e.vector })),
   };
 }
 
@@ -114,14 +94,29 @@ function buildWhyMatched(keywordHit: KeywordHit | undefined, hasSemantic: boolea
   return semanticPart || 'Relevant to your query';
 }
 
+const FILTER_ONLY_LIMIT = 50;
+
 export async function search(
   query: string,
   filters: SearchFilters = {}
 ): Promise<SearchResult[]> {
   const trimmed = query.trim();
-  if (trimmed === '') return [];
-
   const { bookmarks: filteredBookmarks, embeddings: embeddingsList } = await loadBookmarksAndEmbeddings(filters);
+
+  if (trimmed === '') {
+    if (!hasAnyFilter(filters)) return [];
+    const sorted = [...filteredBookmarks].sort((a, b) => {
+      const aDate = a.addDate ?? a.createdAt ?? 0;
+      const bDate = b.addDate ?? b.createdAt ?? 0;
+      return bDate - aDate;
+    });
+    return sorted.slice(0, FILTER_ONLY_LIMIT).map((b) => ({
+      bookmark: b,
+      score: 1,
+      whyMatched: 'Filtered results',
+    }));
+  }
+
   const filteredIds = new Set(filteredBookmarks.map((b) => b.id).filter((id): id is number => id != null));
 
   const embeddingByBookmarkId = new Map(

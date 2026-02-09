@@ -26,9 +26,13 @@ export default function SearchPage() {
 
   const canSearch = stats != null && stats.total > 0;
   const queryNonEmpty = query.trim() !== '';
+  const hasFilters = (filters.folder != null && filters.folder !== '') ||
+    (filters.domain != null && filters.domain !== '') ||
+    (filters.dateRange != null && filters.dateRange !== 'any');
+  const shouldSearch = canSearch && (queryNonEmpty || hasFilters);
 
   useEffect(() => {
-    if (!queryNonEmpty || !canSearch) return;
+    if (!shouldSearch) return;
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
       const version = ++requestVersionRef.current;
@@ -58,12 +62,12 @@ export default function SearchPage() {
         debounceRef.current = null;
       }
     };
-  }, [query, filters, canSearch, queryNonEmpty]);
+  }, [query, filters, shouldSearch]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!canSearch || !queryNonEmpty) return;
+    if (!shouldSearch) return;
     if (debounceRef.current != null) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
@@ -166,7 +170,7 @@ export default function SearchPage() {
             </label>
           </div>
         </details>
-        <button type="submit" disabled={noBookmarks || !canSearch || loading || !queryNonEmpty} className="btn btn-primary" title={noBookmarks ? 'Import bookmarks first' : undefined}>
+        <button type="submit" disabled={noBookmarks || !shouldSearch || loading} className="btn btn-primary" title={noBookmarks ? 'Import bookmarks first' : undefined}>
           {loading ? 'Searching…' : 'Search'}
         </button>
       </form>
@@ -189,9 +193,9 @@ export default function SearchPage() {
         </ul>
       )}
 
-      {hasSearched && !loading && results.length === 0 && canSearch && queryNonEmpty && !error && (
+      {hasSearched && !loading && results.length === 0 && canSearch && !error && (
         <div className="empty-state">
-          <p style={{ margin: 0 }}>No bookmarks match your query.</p>
+          <p style={{ margin: 0 }}>{queryNonEmpty ? 'No bookmarks match your query.' : 'No bookmarks match your filters.'}</p>
         </div>
       )}
     </div>

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getEmbeddingStats } from '../embeddings/embeddingService';
-import { search } from '../search/searchService';
-import type { SearchResult } from '../search/searchService';
+import { search, getFilterOptions } from '../search/searchService';
+import type { SearchFilters, SearchResult } from '../search/searchService';
 import SearchResultCard from '../components/SearchResultCard';
 
 export interface ChatTurn {
@@ -16,9 +16,12 @@ export default function ChatPage() {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState('');
   const [stats, setStats] = useState<{ total: number; withEmbedding: number } | null>(null);
+  const [filters, setFilters] = useState<SearchFilters>({ dateRange: 'any' });
+  const [filterOptions, setFilterOptions] = useState<{ folders: string[]; domains: string[] }>({ folders: [], domains: [] });
 
   useEffect(() => {
     getEmbeddingStats().then(setStats);
+    getFilterOptions().then(setFilterOptions);
   }, []);
 
   useEffect(() => {
@@ -36,7 +39,7 @@ export default function ChatPage() {
     setTurns([newTurn]);
 
     try {
-      const results = await search(trimmed, {});
+      const results = await search(trimmed, filters);
       setTurns((prev) => {
         const single = prev[0];
         if (single && single.query === trimmed && single.loading) {
@@ -90,6 +93,49 @@ export default function ChatPage() {
           </div>
         )}
 
+        <details style={{ marginBottom: '0.75rem' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600, marginBottom: '0.5rem' }}>Filters</summary>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+            <label style={labelStyle}>
+              Folder
+              <select
+                value={filters.folder ?? ''}
+                onChange={(e) => setFilters((f) => ({ ...f, folder: e.target.value || undefined }))}
+                style={selectStyle}
+              >
+                <option value="">All</option>
+                {filterOptions.folders.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </label>
+            <label style={labelStyle}>
+              Domain
+              <select
+                value={filters.domain ?? ''}
+                onChange={(e) => setFilters((f) => ({ ...f, domain: e.target.value || undefined }))}
+                style={selectStyle}
+              >
+                <option value="">All</option>
+                {filterOptions.domains.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </label>
+            <label style={labelStyle}>
+              Date added
+              <select
+                value={filters.dateRange ?? 'any'}
+                onChange={(e) => setFilters((f) => ({ ...f, dateRange: (e.target.value as SearchFilters['dateRange']) ?? 'any' }))}
+                style={selectStyle}
+              >
+                <option value="any">Any</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </label>
+          </div>
+        </details>
         <form onSubmit={handleSubmit} style={{ marginTop: '1rem' }}>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input
@@ -228,5 +274,21 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 4,
   backgroundColor: '#252538',
   color: '#eaeaea',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.5rem',
+  fontSize: '0.9rem',
+};
+
+const selectStyle: React.CSSProperties = {
+  padding: '0.35rem 0.5rem',
+  border: '1px solid #2d2d44',
+  borderRadius: 4,
+  backgroundColor: '#252538',
+  color: '#eaeaea',
+  minWidth: 120,
 };
 
