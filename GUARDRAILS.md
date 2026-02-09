@@ -32,3 +32,16 @@ These are non-negotiable rules for every change.
 ## Extension bridge rule
 - Extension must use the content script plus postMessage bridge described in Milestone 6.
 - Do not attempt to share IndexedDB directly between the web app and the extension. Do not propose "shared Dexie DB".
+
+## Code minimalism and quality rules
+- Prefer the simplest implementation that satisfies the current milestone. Do not add abstractions "for future use".
+- Keep functions small and single-purpose. If a file exceeds ~250 lines, refactor.
+- No premature patterns: no DI frameworks, no event buses, no custom state managers unless required.
+- Avoid over-engineering types. Use TypeScript types that are useful, not exhaustive.
+- Use minimal dependencies. If a feature can be done with existing stack, do not add a library.
+- No hidden magic: favor explicit data flow over cleverness.
+- Write only the code required for the requested task. Do not add extra features or "improvements".
+- Add basic error handling and user-facing error messages where needed, but do not build a full logging system.
+- Keep UI components simple: one responsibility per component, minimal props.
+
+Implementation rule: keep code minimal. No premature abstraction. No extra dependencies.

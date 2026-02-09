@@ -1,6 +1,6 @@
 # ShelfEngine
 
-Find saved links using what you remember about them, not folders.
+Turn your bookmarks into a search engine.
 
 ShelfEngine is a **local-first web app** that lets you import your browser bookmarks once and later retrieve them using natural-language queries, search, and filters. All data stays on your device by default.
 
@@ -72,7 +72,7 @@ flowchart LR
 ## Tech Stack
 
 - **TypeScript** + **React** (Vite)
-- **PWA** — works offline after first load
+- **PWA** - works offline after first load
 - **IndexedDB** via Dexie.js
 - **transformers.js** for local embeddings
 - **Web Workers** for heavy computation
