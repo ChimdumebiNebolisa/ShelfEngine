@@ -23,7 +23,7 @@ export default function Layout({ children }: LayoutProps) {
     setSidebarOpen(false);
   }, [location]);
 
-  const isSearch = location.pathname === '/' || location.pathname.startsWith('/search');
+  const isSearch = location.pathname.startsWith('/search');
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
@@ -42,30 +42,20 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div style={styles.container}>
-      {isNarrow && (
-        <button
-          type="button"
-          className="btn"
-          aria-label="Open menu"
-          onClick={() => setSidebarOpen(true)}
-          style={{
-            position: 'fixed',
-            top: '1rem',
-            left: '1rem',
-            zIndex: 10,
-            padding: '0.5rem 0.75rem',
-            border: '1px solid #2d2d44',
-            borderRadius: 4,
-            backgroundColor: 'rgba(255,255,255,0.06)',
-            color: '#eaeaea',
-            cursor: 'pointer',
-            fontSize: '1.25rem',
-            lineHeight: 1,
-          }}
-        >
-          &#9776;
-        </button>
-      )}
+      <header style={styles.header}>
+        {isNarrow && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            aria-label="Open menu"
+            onClick={() => setSidebarOpen(true)}
+            style={{ marginRight: '0.5rem', fontSize: '1.25rem', lineHeight: 1 }}
+          >
+            &#9776;
+          </button>
+        )}
+        <span style={styles.headerBrand}>ShelfEngine</span>
+      </header>
       {isNarrow && sidebarOpen && (
         <div
           role="button"
@@ -82,51 +72,44 @@ export default function Layout({ children }: LayoutProps) {
           }}
         />
       )}
-      <aside style={sidebarStyle}>
-        <nav style={styles.nav}>
-          <Link to="/" style={styles.brandLink}>
-            ShelfEngine
-          </Link>
-          <Link
-            to="/import"
-            style={{ ...styles.navLink, ...(isActive('/import') ? styles.navLinkActive : {}) }}
-          >
-            Import
-          </Link>
-          <Link
-            to="/"
-            style={{ ...styles.navLink, ...(isSearch ? styles.navLinkActive : {}) }}
-          >
-            Search
-          </Link>
-          <Link
-            to="/chat"
-            style={{ ...styles.navLink, ...(isActive('/chat') ? styles.navLinkActive : {}) }}
-          >
-            Chat
-          </Link>
-          {isNarrow && (
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setSidebarOpen(false)}
-              style={{
-                marginTop: '1rem',
-                padding: '0.5rem 1rem',
-                width: '100%',
-                border: '1px solid #2d2d44',
-                borderRadius: 4,
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                color: '#eaeaea',
-                cursor: 'pointer',
-              }}
+      <div style={styles.contentRow}>
+        <aside style={sidebarStyle}>
+          <nav style={styles.nav}>
+            <Link to="/" style={styles.brandLink}>
+              ShelfEngine
+            </Link>
+            <Link
+              to="/import"
+              style={{ ...styles.navLink, ...(isActive('/import') ? styles.navLinkActive : {}) }}
             >
-              Close
-            </button>
-          )}
-        </nav>
-      </aside>
-      <main style={{ ...styles.main, ...(isNarrow ? { paddingLeft: '4.25rem' } : {}) }}>{children}</main>
+              Import
+            </Link>
+            <Link
+              to="/search"
+              style={{ ...styles.navLink, ...(isSearch ? styles.navLinkActive : {}) }}
+            >
+              Search
+            </Link>
+            <Link
+              to="/chat"
+              style={{ ...styles.navLink, ...(isActive('/chat') ? styles.navLinkActive : {}) }}
+            >
+              Chat
+            </Link>
+            {isNarrow && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setSidebarOpen(false)}
+                style={{ marginTop: '1rem', width: '100%' }}
+              >
+                Close
+              </button>
+            )}
+          </nav>
+        </aside>
+        <main style={{ ...styles.main, ...(isNarrow ? { paddingLeft: '4.25rem' } : {}) }}>{children}</main>
+      </div>
     </div>
   );
 }
@@ -134,7 +117,28 @@ export default function Layout({ children }: LayoutProps) {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
+    flexDirection: 'column',
     minHeight: '100vh',
+  },
+  header: {
+    flexShrink: 0,
+    height: 48,
+    display: 'flex',
+    alignItems: 'center',
+    paddingLeft: '1rem',
+    paddingRight: '1rem',
+    backgroundColor: '#1a1a2e',
+    borderBottom: '1px solid #2d2d44',
+  },
+  headerBrand: {
+    fontSize: '1.1rem',
+    fontWeight: 600,
+    color: '#eaeaea',
+  },
+  contentRow: {
+    display: 'flex',
+    flex: 1,
+    minHeight: 0,
   },
   sidebar: {
     width: 200,

@@ -4,6 +4,14 @@
   box-sizing: border-box;
 }
 
+:root {
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-8: 2rem;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
@@ -23,9 +31,25 @@ main h2 {
 }
 main h1 {
   margin-top: 0;
-  margin-bottom: 0.5rem;
-  font-size: 1.25rem;
+  margin-bottom: var(--space-2);
+  font-size: 1.35rem;
   font-weight: 600;
+}
+
+.page-subtitle {
+  color: #a0a0b0;
+  margin-top: 0;
+  margin-bottom: var(--space-3);
+  font-size: 0.95rem;
+}
+
+.empty-state {
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid #2d2d44;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #a0a0b0;
 }
 
 /* Focus styles for keyboard users */
@@ -40,6 +64,9 @@ a:focus-visible {
 /* Button states: transition and hover/active/disabled */
 .btn {
   transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 4px;
+  font-size: 1rem;
 }
 .btn:hover:not(:disabled) {
   filter: brightness(1.15);
@@ -50,6 +77,27 @@ a:focus-visible {
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.btn-primary {
+  border: 1px solid #3d5a80;
+  background-color: #2d4a6a;
+  color: #eaeaea;
+  cursor: pointer;
+}
+
+.btn-danger {
+  border: 1px solid rgba(180, 80, 80, 0.6);
+  background-color: rgba(180, 80, 80, 0.3);
+  color: #eaeaea;
+  cursor: pointer;
+}
+
+.btn-secondary {
+  border: 1px solid #2d2d44;
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #eaeaea;
+  cursor: pointer;
 }
 
 /* Card transition and hover for result cards */
@@ -86,4 +134,104 @@ a {
 
 a:hover {
   text-decoration: underline;
+}
+
+/* Landing page */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero {
+  max-width: 960px;
+  margin: 0 auto var(--space-8);
+  padding: 0 var(--space-4);
+}
+.hero-headline {
+  font-size: 2rem;
+  line-height: 1.2;
+  margin: 0 0 var(--space-3);
+  animation: fadeUp 0.4s ease-out forwards;
+}
+.hero-subtitle {
+  color: #a0a0b0;
+  font-size: 0.9rem;
+  margin: 0 0 var(--space-4);
+  animation: fadeUp 0.4s ease-out 0.08s forwards;
+  opacity: 0;
+}
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  animation: fadeUp 0.4s ease-out 0.16s forwards;
+  opacity: 0;
+}
+.hero-link {
+  color: #a0a0b0;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.hero-link:hover {
+  color: #7eb8da;
+  text-decoration: underline;
+}
+
+.landing-card {
+  max-width: 960px;
+  margin: 0 auto var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid #2d2d44;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.landing-card-title {
+  font-size: 1rem;
+  margin: 0 0 var(--space-3);
+  font-weight: 600;
+}
+.example-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.example-chip {
+  display: inline-block;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid #2d2d44;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #eaeaea;
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.example-chip:hover {
+  transform: translateY(-1px);
+  border-color: #3d5a80;
+}
+
+.landing-compact-list,
+.landing-bullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.9rem;
+  color: #a0a0b0;
+  line-height: 1.6;
+}
+.landing-compact-list li,
+.landing-bullets li {
+  margin-bottom: var(--space-1);
+}
+.landing-compact-list li:last-child,
+.landing-bullets li:last-child {
+  margin-bottom: 0;
 }

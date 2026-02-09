@@ -94,7 +94,7 @@ export default function ImportPage() {
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Import</h1>
-      <p>Upload your chrome bookmarks.</p>
+      <p className="page-subtitle">Upload your chrome bookmarks.</p>
 
       <details style={{ marginBottom: '1.5rem' }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How does this work?</summary>
@@ -195,20 +195,18 @@ export default function ImportPage() {
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem', alignItems: 'flex-start' }}>
             <button
               type="button"
-              className="btn"
+              className="btn btn-primary"
               onClick={handleBuildIndex}
               disabled={indexing || stats.withEmbedding >= stats.total}
-              style={primaryButtonStyle}
             >
               {indexing ? 'Indexing…' : 'Build index'}
             </button>
             {!showRemoveConfirm ? (
               <button
                 type="button"
-                className="btn"
+                className="btn btn-danger"
                 onClick={() => setShowRemoveConfirm(true)}
                 disabled={importing || indexing || clearing}
-                style={dangerButtonStyle}
               >
                 {clearing ? 'Removing…' : 'Remove all bookmarks'}
               </button>
@@ -227,10 +225,10 @@ export default function ImportPage() {
                   />
                 </label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button type="button" className="btn" style={primaryButtonStyle} onClick={handleRemoveAll} disabled={removeConfirmValue.trim().toUpperCase() !== 'DELETE'}>
+                  <button type="button" className="btn btn-primary" onClick={handleRemoveAll} disabled={removeConfirmValue.trim().toUpperCase() !== 'DELETE'}>
                     Confirm
                   </button>
-                  <button type="button" className="btn" style={dangerButtonStyle} onClick={() => { setShowRemoveConfirm(false); setRemoveConfirmValue(''); }}>
+                  <button type="button" className="btn btn-danger" onClick={() => { setShowRemoveConfirm(false); setRemoveConfirmValue(''); }}>
                     Cancel
                   </button>
                 </div>
@@ -263,22 +261,3 @@ export default function ImportPage() {
   );
 }
 
-const primaryButtonStyle: React.CSSProperties = {
-  padding: '0.5rem 1rem',
-  fontSize: '1rem',
-  border: '1px solid #3d5a80',
-  borderRadius: 4,
-  backgroundColor: '#2d4a6a',
-  color: '#eaeaea',
-  cursor: 'pointer',
-};
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: '0.5rem 1rem',
-  fontSize: '1rem',
-  border: '1px solid rgba(180,80,80,0.6)',
-  borderRadius: 4,
-  backgroundColor: 'rgba(180,80,80,0.3)',
-  color: '#eaeaea',
-  cursor: 'pointer',
-};

@@ -87,15 +87,24 @@ export default function SearchPage() {
     }
   }
 
+  const noBookmarks = stats != null && stats.total === 0;
+
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Search</h1>
-      <p>Find bookmarks by keyword or natural-language query.</p>
+      <p className="page-subtitle">Find bookmarks by keyword or natural-language query.</p>
+
+      {noBookmarks && (
+        <div className="empty-state" style={{ marginBottom: '1rem' }}>
+          <p style={{ margin: '0 0 0.5rem 0' }}>No bookmarks yet. Import your Chrome bookmarks to get started.</p>
+          <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>Import</Link>
+        </div>
+      )}
 
       {stats != null && stats.total > 0 && stats.withEmbedding === 0 && (
-        <div style={{ padding: '0.75rem', backgroundColor: 'rgba(200,160,80,0.2)', borderRadius: 4 }}>
+        <div style={{ padding: '0.75rem', backgroundColor: 'rgba(200,160,80,0.2)', borderRadius: 4, marginBottom: '1rem' }}>
           <p style={{ margin: '0 0 0.5rem 0' }}>Keyword-only until you build the index. Import then &quot;Build index&quot; for natural-language search.</p>
-          <Link to="/import" className="btn" style={{ ...buttonStyle, display: 'inline-block', textDecoration: 'none' }}>Go to Import</Link>
+          <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>Go to Import</Link>
         </div>
       )}
 
@@ -157,7 +166,7 @@ export default function SearchPage() {
             </label>
           </div>
         </details>
-        <button type="submit" disabled={!canSearch || loading || !queryNonEmpty} className="btn" style={buttonStyle}>
+        <button type="submit" disabled={noBookmarks || !canSearch || loading || !queryNonEmpty} className="btn btn-primary" title={noBookmarks ? 'Import bookmarks first' : undefined}>
           {loading ? 'Searching…' : 'Search'}
         </button>
       </form>
@@ -181,7 +190,9 @@ export default function SearchPage() {
       )}
 
       {hasSearched && !loading && results.length === 0 && canSearch && queryNonEmpty && !error && (
-        <p style={{ color: '#a0a0b0' }}>No bookmarks match your query.</p>
+        <div className="empty-state">
+          <p style={{ margin: 0 }}>No bookmarks match your query.</p>
+        </div>
       )}
     </div>
   );
@@ -214,12 +225,3 @@ const selectStyle: React.CSSProperties = {
   minWidth: 120,
 };
 
-const buttonStyle: React.CSSProperties = {
-  padding: '0.5rem 1rem',
-  fontSize: '1rem',
-  border: '1px solid #3d5a80',
-  borderRadius: 4,
-  backgroundColor: '#2d4a6a',
-  color: '#eaeaea',
-  cursor: 'pointer',
-};

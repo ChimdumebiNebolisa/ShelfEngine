@@ -32,7 +32,7 @@ interface SearchResultCardProps {
   result: SearchResult;
 }
 
-export default function SearchResultCard({ result }: SearchResultCardProps) {
+function SearchResultCard({ result }: SearchResultCardProps) {
   const { bookmark, whyMatched, matchedTerms, score } = result;
   const title = bookmark.title || bookmark.url;
   const titleContent = matchedTerms?.length ? highlightText(title, matchedTerms) : title;
@@ -67,3 +67,6 @@ export default function SearchResultCard({ result }: SearchResultCardProps) {
     </li>
   );
 }
+
+export default SearchResultCard;
+export { SearchResultCard as ResultCard };

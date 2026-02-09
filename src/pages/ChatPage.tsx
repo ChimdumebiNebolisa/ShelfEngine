@@ -21,6 +21,14 @@ export default function ChatPage() {
     getEmbeddingStats().then(setStats);
   }, []);
 
+  useEffect(() => {
+    const prefill = sessionStorage.getItem('shelfengine_prefill');
+    if (prefill) {
+      setInput(prefill);
+      sessionStorage.removeItem('shelfengine_prefill');
+    }
+  }, []);
+
   async function runQuery(trimmed: string) {
     if (!trimmed || (stats != null && stats.withEmbedding === 0)) return;
     setInput('');
@@ -55,6 +63,7 @@ export default function ChatPage() {
     runQuery(trimmed);
   }
 
+  const noBookmarks = stats != null && stats.total === 0;
   const canSend = stats != null && stats.withEmbedding > 0 && input.trim() !== '';
   const sending = turns.some((t) => t.loading);
 
@@ -62,12 +71,19 @@ export default function ChatPage() {
     <div style={pageStyle}>
       <div style={stickyHeaderStyle}>
         <h1 style={{ marginTop: 0 }}>Chat</h1>
-        <p>Ask in plain language; you&apos;ll get matching bookmarks with why it matched as well as a similarity score.</p>
+        <p className="page-subtitle">Ask in plain language; you&apos;ll get matching bookmarks with why it matched as well as a similarity score.</p>
+
+        {noBookmarks && (
+          <div className="empty-state" style={{ marginBottom: '1rem' }}>
+            <p style={{ margin: '0 0 0.5rem 0' }}>No bookmarks yet. Import your Chrome bookmarks to get started.</p>
+            <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>Import</Link>
+          </div>
+        )}
 
         {stats != null && stats.total > 0 && stats.withEmbedding === 0 && (
-          <div style={{ padding: '0.75rem', backgroundColor: 'rgba(200,160,80,0.2)', borderRadius: 4 }}>
+          <div style={{ padding: '0.75rem', backgroundColor: 'rgba(200,160,80,0.2)', borderRadius: 4, marginBottom: '1rem' }}>
             <p style={{ margin: '0 0 0.5rem 0' }}>No index yet. Import bookmarks and click &quot;Build index&quot; first.</p>
-            <Link to="/import" className="btn" style={{ ...buttonStyle, display: 'inline-block', textDecoration: 'none' }}>Go to Import</Link>
+            <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>Go to Import</Link>
           </div>
         )}
 
@@ -77,11 +93,11 @@ export default function ChatPage() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={stats != null && stats.withEmbedding > 0 ? 'e.g. that article about React hooks...' : 'Build index on Import to enable search'}
-              disabled={!(stats != null && stats.withEmbedding > 0)}
-              style={stats != null && stats.withEmbedding > 0 ? inputStyle : { ...inputStyle, backgroundColor: '#1e1e2e' }}
+              placeholder={noBookmarks ? 'Import bookmarks to get started' : (stats != null && stats.withEmbedding > 0 ? 'e.g. that article about React hooks...' : 'Build index on Import to enable search')}
+              disabled={noBookmarks || !(stats != null && stats.withEmbedding > 0)}
+              style={noBookmarks || !(stats != null && stats.withEmbedding > 0) ? { ...inputStyle, backgroundColor: '#1e1e2e' } : inputStyle}
             />
-            <button type="submit" disabled={!canSend || sending} className="btn" style={buttonStyle}>
+            <button type="submit" disabled={noBookmarks || !canSend || sending} className="btn btn-primary" title={noBookmarks ? 'Import bookmarks first' : undefined}>
               {sending ? '…' : 'Send'}
             </button>
           </div>
@@ -91,14 +107,13 @@ export default function ChatPage() {
       <div style={turnsAreaStyle}>
         {turns.length === 0 && stats != null && stats.withEmbedding > 0 && (
           <div style={emptyStateStyle}>
-            <p style={{ margin: '0 0 0.75rem 0', color: '#a0a0b0' }}>Ask in plain language. You&apos;ll get matching bookmarks with why it matched and a similarity score.</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {['that article about React hooks', 'tutorials I saved'].map((example) => (
                 <button
                   key={example}
                   type="button"
-                  className="btn"
-                  style={chipStyle}
+                  className="btn btn-secondary"
+                  style={{ borderRadius: 9999 }}
                   onClick={() => runQuery(example)}
                 >
                   {example}
@@ -122,7 +137,9 @@ export default function ChatPage() {
             {!turn.loading && turn.results !== null && (
               <>
                 {turn.results.length === 0 ? (
-                  <div style={metaStyle}>No bookmarks match your query.</div>
+                  <div className="empty-state" style={{ marginTop: '0.25rem' }}>
+                    <p style={{ margin: 0 }}>No bookmarks match your query.</p>
+                  </div>
                 ) : (
                   <>
                     <div style={{ fontSize: '0.85rem', color: '#808090', marginBottom: '0.35rem' }}>Matches</div>
@@ -172,16 +189,6 @@ const emptyStateStyle: React.CSSProperties = {
   padding: '1.5rem 0',
 };
 
-const chipStyle: React.CSSProperties = {
-  padding: '0.4rem 0.75rem',
-  fontSize: '0.9rem',
-  border: '1px solid #2d2d44',
-  borderRadius: 9999,
-  backgroundColor: 'rgba(255,255,255,0.06)',
-  color: '#eaeaea',
-  cursor: 'pointer',
-};
-
 const userBubbleWrapStyle: React.CSSProperties = {
   display: 'flex',
   marginBottom: '0.5rem',
@@ -220,12 +227,3 @@ const inputStyle: React.CSSProperties = {
   color: '#eaeaea',
 };
 
-const buttonStyle: React.CSSProperties = {
-  padding: '0.5rem 1rem',
-  fontSize: '1rem',
-  border: '1px solid #3d5a80',
-  borderRadius: 4,
-  backgroundColor: '#2d4a6a',
-  color: '#eaeaea',
-  cursor: 'pointer',
-};
