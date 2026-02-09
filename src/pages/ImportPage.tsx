@@ -94,7 +94,7 @@ export default function ImportPage() {
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Import</h1>
-      <p>Upload a Chrome bookmarks export (bookmarks.html).</p>
+      <p>Upload your chrome bookmarks.</p>
 
       <details style={{ marginBottom: '1.5rem' }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How does this work?</summary>

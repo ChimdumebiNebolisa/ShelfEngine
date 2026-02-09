@@ -88,6 +88,12 @@ export default function Layout({ children }: LayoutProps) {
             ShelfEngine
           </Link>
           <Link
+            to="/import"
+            style={{ ...styles.navLink, ...(isActive('/import') ? styles.navLinkActive : {}) }}
+          >
+            Import
+          </Link>
+          <Link
             to="/"
             style={{ ...styles.navLink, ...(isSearch ? styles.navLinkActive : {}) }}
           >
@@ -98,12 +104,6 @@ export default function Layout({ children }: LayoutProps) {
             style={{ ...styles.navLink, ...(isActive('/chat') ? styles.navLinkActive : {}) }}
           >
             Chat
-          </Link>
-          <Link
-            to="/import"
-            style={{ ...styles.navLink, ...(isActive('/import') ? styles.navLinkActive : {}) }}
-          >
-            Import
           </Link>
           {isNarrow && (
             <button
