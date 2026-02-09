@@ -17,12 +17,6 @@ ShelfEngine is a **local-first web app** that lets you import your browser bookm
 
 **Getting `bookmarks.html` (Chrome):** Open Bookmark Manager (`Ctrl+Shift+O` / `Cmd+Shift+O`), click the ⋮ menu, then **Export bookmarks**. Save the file and upload it in ShelfEngine’s Import page.
 
-## Screenshot
-
-![ShelfEngine](screenshot.png)
-
-*(Add a screenshot of the app here; save it as `screenshot.png` in the repo root.)*
-
 ## Architecture
 
 ```mermaid
