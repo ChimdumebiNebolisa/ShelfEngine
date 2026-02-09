@@ -9,8 +9,7 @@ import type { ParsedQuery } from './queryParse';
 const TOP_K = 10;
 const MIN_TERM_LENGTH = 2;
 
-const JUNK_TITLES = new Set(['home', 'untitled', 'default', 'new tab', 'bookmark', 'page']);
-const JUNK_TITLE_MAX_LEN = 4;
+const RECENCY_DAYS = 7;
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -29,8 +28,15 @@ export function phraseMatchesField(text: string, phrase: string): boolean {
 
 export function isJunkTitle(title: string): boolean {
   const t = (title ?? '').trim().toLowerCase();
-  if (t.length <= JUNK_TITLE_MAX_LEN) return true;
-  return JUNK_TITLES.has(t);
+  if (t.length < 4) return true;
+  return t === 'home' || t === 'untitled';
+}
+
+export function isRecent(bookmark: { addDate?: number | null; createdAt?: number }): boolean {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const dateSec = bookmark.addDate ?? (bookmark.createdAt != null ? Math.floor(bookmark.createdAt / 1000) : null);
+  if (dateSec == null) return false;
+  return (nowSec - dateSec) <= RECENCY_DAYS * 24 * 3600;
 }
 
 export function cosineSimilarity(a: number[], b: number[]): number {

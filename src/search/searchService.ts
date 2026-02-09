@@ -7,7 +7,7 @@ import { db } from '../db';
 import type { Bookmark } from '../db';
 import { embedQuery } from '../embeddings/embeddingService';
 import { parseQuery } from './queryParse';
-import { semanticTopK, keywordSearch, keywordSearchStructured, isJunkTitle } from './retrieval';
+import { semanticTopK, keywordSearchStructured, isJunkTitle, isRecent } from './retrieval';
 import type { KeywordHit, MatchedIn } from './retrieval';
 
 export type { ParsedQuery } from './queryParse';
@@ -177,22 +177,22 @@ export async function search(
   if (semanticItems.length === 0) {
     const keywordHits = keywordSearchStructured(filteredBookmarks, parsed);
     const maxKw = keywordHits.length > 0 ? Math.max(...keywordHits.map((kh) => kh.score), 1) : 1;
-    const queryTokenCount = parsed.terms.length + parsed.phrases.length;
-    const nowSec = Math.floor(Date.now() / 1000);
+    const queryTokens = parsed.terms.length + parsed.phrases.length;
     return keywordHits.slice(0, 10).map((kh) => {
       const b = bookmarkById.get(kh.bookmarkId);
       if (!b) return null;
-      let score = Math.min(1, kh.score / maxKw);
-      score += Math.min(PHRASE_BOOST_CAP, (kh.matchedPhrases?.length ?? 0) * PHRASE_BOOST_PER);
-      if (isJunkTitle(b.title ?? '')) score -= JUNK_TITLE_PENALTY;
-      if (queryTokenCount <= 2 && b.addDate != null && (nowSec - b.addDate) <= RECENCY_DAYS * 24 * 3600) {
-        score += RECENCY_BOOST_CAP;
-      }
-      score = Math.max(0, Math.min(1, score));
+      const semantic = 0;
+      const keyword = Math.min(1, (kh.score ?? 0) / maxKw);
+      const phraseCount = kh.matchedPhrases?.length ?? 0;
+      const phraseBoost = Math.min(PHRASE_BOOST_CAP, phraseCount * PHRASE_BOOST_PER);
+      const junkPenalty = isJunkTitle(b.title ?? '') ? JUNK_TITLE_PENALTY : 0;
+      const recencyBoost = (queryTokens <= 2 && isRecent(b)) ? RECENCY_BOOST_CAP : 0;
+      const raw = ALPHA * semantic + (1 - ALPHA) * keyword + phraseBoost - junkPenalty + recencyBoost;
+      const finalScore = Math.max(0, Math.min(1, raw));
       const reasons = buildReasons(kh, false);
       return {
         bookmark: b,
-        score,
+        score: finalScore,
         whyMatched: formatReasons(reasons),
         reasons,
         matchedTerms: kh.matchedTerms?.length ? kh.matchedTerms : undefined,
@@ -216,36 +216,29 @@ export async function search(
     ...semanticHits.map((s) => s.bookmarkId),
   ]);
 
-  const queryTokenCount = parsed.terms.length + parsed.phrases.length;
-  const nowSec = Math.floor(Date.now() / 1000);
+  const queryTokens = parsed.terms.length + parsed.phrases.length;
 
   const results: SearchResult[] = [];
   for (const bookmarkId of candidateIds) {
     const b = bookmarkById.get(bookmarkId);
     if (!b) continue;
-    const semanticScore = semanticByBookmarkId.get(bookmarkId) ?? 0;
+    const semantic = semanticByBookmarkId.get(bookmarkId) ?? 0;
     const kh = keywordByBookmarkId.get(bookmarkId);
     const rawKeyword = kh?.score ?? 0;
-    if (rawKeyword === 0 && semanticScore < MIN_SEMANTIC_ONLY_SCORE) continue;
-    const normKeyword = Math.min(1, rawKeyword / maxKeywordScore);
-    let combined = ALPHA * semanticScore + (1 - ALPHA) * normKeyword;
-
+    if (rawKeyword === 0 && semantic < MIN_SEMANTIC_ONLY_SCORE) continue;
+    const keyword = Math.min(1, rawKeyword / maxKeywordScore);
     const phraseCount = kh?.matchedPhrases?.length ?? 0;
-    combined += Math.min(PHRASE_BOOST_CAP, phraseCount * PHRASE_BOOST_PER);
+    const phraseBoost = Math.min(PHRASE_BOOST_CAP, phraseCount * PHRASE_BOOST_PER);
+    const junkPenalty = isJunkTitle(b.title ?? '') ? JUNK_TITLE_PENALTY : 0;
+    const recencyBoost = (queryTokens <= 2 && isRecent(b)) ? RECENCY_BOOST_CAP : 0;
+    const raw = ALPHA * semantic + (1 - ALPHA) * keyword + phraseBoost - junkPenalty + recencyBoost;
+    const finalScore = Math.max(0, Math.min(1, raw));
+    if (finalScore < MIN_COMBINED_SCORE) continue;
 
-    if (isJunkTitle(b.title ?? '')) combined -= JUNK_TITLE_PENALTY;
-
-    if (queryTokenCount <= 2 && b.addDate != null && (nowSec - b.addDate) <= RECENCY_DAYS * 24 * 3600) {
-      combined += RECENCY_BOOST_CAP;
-    }
-
-    combined = Math.max(0, Math.min(1, combined));
-    if (combined < MIN_COMBINED_SCORE) continue;
-
-    const reasons = buildReasons(kh, semanticScore > 0);
+    const reasons = buildReasons(kh, semantic > 0);
     results.push({
       bookmark: b,
-      score: combined,
+      score: finalScore,
       whyMatched: formatReasons(reasons),
       reasons,
       matchedTerms: kh?.matchedTerms && kh.matchedTerms.length > 0 ? kh.matchedTerms : undefined,
