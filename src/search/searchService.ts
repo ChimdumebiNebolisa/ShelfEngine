@@ -6,8 +6,11 @@
 import { db } from '../db';
 import type { Bookmark } from '../db';
 import { embedQuery } from '../embeddings/embeddingService';
+import { parseQuery } from './queryParse';
 import { semanticTopK, keywordSearch } from './retrieval';
 import type { KeywordHit, MatchedIn } from './retrieval';
+
+export type { ParsedQuery } from './queryParse';
 
 const MIN_SEMANTIC_SCORE = 0.4;
 const MIN_SEMANTIC_ONLY_SCORE = 0.5;
@@ -96,15 +99,28 @@ function buildWhyMatched(keywordHit: KeywordHit | undefined, hasSemantic: boolea
 
 const FILTER_ONLY_LIMIT = 50;
 
+function mergeFilters(ui: SearchFilters, parsed: { domain?: string; folder?: string }): SearchFilters {
+  return {
+    ...ui,
+    ...(parsed.domain != null && parsed.domain !== '' && { domain: parsed.domain }),
+    ...(parsed.folder != null && parsed.folder !== '' && { folder: parsed.folder }),
+  };
+}
+
 export async function search(
   query: string,
   filters: SearchFilters = {}
 ): Promise<SearchResult[]> {
   const trimmed = query.trim();
-  const { bookmarks: filteredBookmarks, embeddings: embeddingsList } = await loadBookmarksAndEmbeddings(filters);
+  const parsed = parseQuery(trimmed);
+  const effectiveFilters = mergeFilters(filters, parsed);
+  const { bookmarks: filteredBookmarks, embeddings: embeddingsList } = await loadBookmarksAndEmbeddings(effectiveFilters);
 
-  if (trimmed === '') {
-    if (!hasAnyFilter(filters)) return [];
+  const queryFilterOnly = parsed.domain != null || parsed.folder != null;
+  const searchTextEmpty = parsed.searchText.trim() === '';
+  if (searchTextEmpty && !queryFilterOnly) return [];
+  if (trimmed === '' || (searchTextEmpty && queryFilterOnly)) {
+    if (!hasAnyFilter(effectiveFilters)) return [];
     const sorted = [...filteredBookmarks].sort((a, b) => {
       const aDate = a.addDate ?? a.createdAt ?? 0;
       const bDate = b.addDate ?? b.createdAt ?? 0;
@@ -131,7 +147,7 @@ export async function search(
   );
 
   if (semanticItems.length === 0) {
-    const keywordHits = keywordSearch(filteredBookmarks, trimmed);
+    const keywordHits = keywordSearch(filteredBookmarks, parsed.searchText || ' ');
     return keywordHits.slice(0, 10).map((kh) => {
       const b = bookmarkById.get(kh.bookmarkId);
       if (!b) return null;
@@ -143,10 +159,10 @@ export async function search(
     }).filter((r): r is SearchResult => r != null);
   }
 
-  const queryVector = await embedQuery(trimmed || ' ');
+  const queryVector = await embedQuery(parsed.searchText || ' ');
   const semanticHitsRaw = semanticTopK(semanticItems, queryVector, 10);
   const semanticHits = semanticHitsRaw.filter((s) => s.score >= MIN_SEMANTIC_SCORE);
-  const keywordHits = keywordSearch(filteredBookmarks, trimmed);
+  const keywordHits = keywordSearch(filteredBookmarks, parsed.searchText || ' ');
   const keywordByBookmarkId = new Map(keywordHits.map((kh) => [kh.bookmarkId, kh]));
   const semanticByBookmarkId = new Map(semanticHits.map((s) => [s.bookmarkId, s.score]));
 
