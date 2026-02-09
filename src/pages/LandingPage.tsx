@@ -22,9 +22,9 @@ export default function LandingPage() {
           <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>
             Import bookmarks
           </Link>
-          <a href="#example-queries" className="hero-link">
-            See example queries
-          </a>
+          <Link to="/import" className="btn btn-secondary" style={{ display: 'inline-block', textDecoration: 'none', marginLeft: '0.5rem' }}>
+            Try sample bookmarks
+          </Link>
         </div>
       </section>
 

@@ -9,6 +9,11 @@ import { embedQuery } from '../embeddings/embeddingService';
 import { semanticTopK, keywordSearch } from './retrieval';
 import type { KeywordHit, MatchedIn } from './retrieval';
 
+const MIN_SEMANTIC_SCORE = 0.4;
+const MIN_SEMANTIC_ONLY_SCORE = 0.5;
+const MIN_COMBINED_SCORE = 0.2;
+const ALPHA = 0.55;
+
 export type DateRangeFilter = 'any' | '7d' | '30d';
 
 export interface SearchFilters {
@@ -144,7 +149,8 @@ export async function search(
   }
 
   const queryVector = await embedQuery(trimmed || ' ');
-  const semanticHits = semanticTopK(semanticItems, queryVector, 10);
+  const semanticHitsRaw = semanticTopK(semanticItems, queryVector, 10);
+  const semanticHits = semanticHitsRaw.filter((s) => s.score >= MIN_SEMANTIC_SCORE);
   const keywordHits = keywordSearch(filteredBookmarks, trimmed);
   const keywordByBookmarkId = new Map(keywordHits.map((kh) => [kh.bookmarkId, kh]));
   const semanticByBookmarkId = new Map(semanticHits.map((s) => [s.bookmarkId, s.score]));
@@ -152,7 +158,6 @@ export async function search(
   const maxKeywordScore = keywordHits.length > 0
     ? Math.max(...keywordHits.map((kh) => kh.score), 1)
     : 1;
-  const ALPHA = 0.55;
 
   const candidateIds = new Set<number>([
     ...keywordHits.map((kh) => kh.bookmarkId),
@@ -166,8 +171,10 @@ export async function search(
     const semanticScore = semanticByBookmarkId.get(bookmarkId) ?? 0;
     const kh = keywordByBookmarkId.get(bookmarkId);
     const rawKeyword = kh?.score ?? 0;
+    if (rawKeyword === 0 && semanticScore < MIN_SEMANTIC_ONLY_SCORE) continue;
     const normKeyword = Math.min(1, rawKeyword / maxKeywordScore);
     const combined = ALPHA * semanticScore + (1 - ALPHA) * normKeyword;
+    if (combined < MIN_COMBINED_SCORE) continue;
     results.push({
       bookmark: b,
       score: combined,

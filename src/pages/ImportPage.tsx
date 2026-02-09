@@ -50,6 +50,31 @@ export default function ImportPage() {
     if (inputRef.current) inputRef.current.value = '';
   }
 
+  async function handleTrySample() {
+    setImporting(true);
+    setStatus(null);
+    try {
+      const res = await fetch('/sample-bookmarks.html');
+      if (!res.ok) throw new Error('Could not load sample bookmarks');
+      const blob = await res.blob();
+      const file = new File([blob], 'sample-bookmarks.html', { type: 'text/html' });
+      const result = await runImport(file, 'replace');
+      setStatus({
+        status: result.status,
+        counts: result.counts,
+        error: result.error,
+      });
+    } catch (err) {
+      setStatus({
+        status: 'failure',
+        counts: { added: 0, skipped: 0, failed: 0 },
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setImporting(false);
+    }
+  }
+
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     processFile(e.target.files?.[0] ?? null);
   }
@@ -161,6 +186,19 @@ export default function ImportPage() {
           {importing ? 'Importing…' : 'Drop bookmarks.html here or click to choose'}
         </div>
       </div>
+
+      <p style={{ marginTop: '0.75rem', marginBottom: 0, fontSize: '0.95rem', color: '#a0a0b0' }}>
+        No file?{' '}
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={handleTrySample}
+          disabled={importing}
+        >
+          Try sample bookmarks
+        </button>
+        {' '}to load demo bookmarks and test search and chat without importing.
+      </p>
 
       {importing && <p>Importing…</p>}
 

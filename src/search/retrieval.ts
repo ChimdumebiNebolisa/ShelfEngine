@@ -6,6 +6,17 @@
 import type { Bookmark } from '../db';
 
 const TOP_K = 10;
+const MIN_TERM_LENGTH = 2;
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function termMatchesField(term: string, field: string): boolean {
+  if (term.length < MIN_TERM_LENGTH) return false;
+  const re = new RegExp(`\\b${escapeRegex(term)}\\b`, 'i');
+  return re.test(field);
+}
 
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) return 0;
@@ -44,7 +55,7 @@ function tokenizeQuery(q: string): string[] {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .split(/\W+/)
-    .filter((t) => t.length > 0);
+    .filter((t) => t.length >= MIN_TERM_LENGTH);
 }
 
 export type MatchedIn = 'title' | 'url' | 'folderPath' | 'domain';
@@ -82,22 +93,22 @@ export function keywordSearch(bookmarks: Bookmark[], query: string): KeywordHit[
     let score = 0;
 
     for (const term of terms) {
-      if (title.includes(term)) {
+      if (termMatchesField(term, title)) {
         if (!matchedTerms.includes(term)) matchedTerms.push(term);
         if (!matchedIn.includes('title')) matchedIn.push('title');
         score += FIELD_WEIGHTS.title;
       }
-      if (url.includes(term)) {
+      if (termMatchesField(term, url)) {
         if (!matchedTerms.includes(term)) matchedTerms.push(term);
         if (!matchedIn.includes('url')) matchedIn.push('url');
         score += FIELD_WEIGHTS.url;
       }
-      if (folderPath.includes(term)) {
+      if (termMatchesField(term, folderPath)) {
         if (!matchedTerms.includes(term)) matchedTerms.push(term);
         if (!matchedIn.includes('folderPath')) matchedIn.push('folderPath');
         score += FIELD_WEIGHTS.folderPath;
       }
-      if (domain.includes(term)) {
+      if (termMatchesField(term, domain)) {
         if (!matchedTerms.includes(term)) matchedTerms.push(term);
         if (!matchedIn.includes('domain')) matchedIn.push('domain');
         score += FIELD_WEIGHTS.domain;

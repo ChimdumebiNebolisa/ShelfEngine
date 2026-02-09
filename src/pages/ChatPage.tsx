@@ -75,8 +75,11 @@ export default function ChatPage() {
 
         {noBookmarks && (
           <div className="empty-state" style={{ marginBottom: '1rem' }}>
-            <p style={{ margin: '0 0 0.5rem 0' }}>No bookmarks yet. Import your Chrome bookmarks to get started.</p>
-            <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>Import</Link>
+            <p style={{ margin: '0 0 0.5rem 0' }}>No bookmarks yet. Import your Chrome bookmarks or try sample bookmarks to test the app.</p>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>Import</Link>
+              <Link to="/import" className="btn btn-secondary" style={{ display: 'inline-block', textDecoration: 'none' }}>Try sample bookmarks</Link>
+            </div>
           </div>
         )}
 

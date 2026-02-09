@@ -26,8 +26,8 @@ This document details the implementation milestones for ShelfEngine. Milestones 
 **Goal:** Parse Chrome `bookmarks.html`, extract title, URL, folder path, add date; deduplicate by normalized URL; persist to IndexedDB and track import status. Support re-import with **merge** (dedupe) or **replace**.
 
 **Key files / components:**
-- Parser: `src/import/parseBookmarksHtml.ts` (or similar) — parse HTML, extract `<a>` + folder hierarchy, normalize URLs
-- Import service: `src/import/importService.ts` — orchestrate parse → dedupe → write to `bookmarks` store, update `imports` store (importId, status, counts, createdAt, error)
+- Parser: `src/import/parseBookmarksHtml.ts` (or similar) - parse HTML, extract `<a>` + folder hierarchy, normalize URLs
+- Import service: `src/import/importService.ts` - orchestrate parse → dedupe → write to `bookmarks` store, update `imports` store (importId, status, counts, createdAt, error)
 - UI: Import screen with file input, "Merge" vs "Replace" choice, and status/feedback (counts, errors)
 - DB: use existing `bookmarks` and `imports` stores from Milestone 1
 
@@ -44,8 +44,8 @@ This document details the implementation milestones for ShelfEngine. Milestones 
 **Goal:** Generate embeddings for bookmarks in a Web Worker using transformers.js; store vectors in IndexedDB. Text for embedding = title + hostname + folder path (per spec). Triggered as part of import (or a dedicated "Build index" step after import).
 
 **Key files / components:**
-- Worker: `src/workers/embedding.worker.ts` — load transformers.js model, accept batch of strings, return vectors
-- Embedding service: `src/embeddings/embeddingService.ts` — prepare concatenated text per bookmark, call worker, write to `embeddings` store (bookmarkId, vector, modelName, createdAt)
+- Worker: `src/workers/embedding.worker.ts` - load transformers.js model, accept batch of strings, return vectors
+- Embedding service: `src/embeddings/embeddingService.ts` - prepare concatenated text per bookmark, call worker, write to `embeddings` store (bookmarkId, vector, modelName, createdAt)
 - Integration: after import (or on demand), iterate bookmarks, batch calls to worker, persist to `embeddings`
 - Progress/status in UI (e.g. "Indexing… 450/1000") so the 60s target is observable
 
@@ -61,8 +61,8 @@ This document details the implementation milestones for ShelfEngine. Milestones 
 **Goal:** Keyword + semantic search over bookmarks (cosine similarity, top-K = 10), optional keyword-overlap boost; filters by folder path, domain, date added. Results show title, URL, folder path, and a short "why matched" explanation.
 
 **Key files / components:**
-- Retrieval: `src/search/retrieval.ts` (or similar) — load embeddings, cosine similarity, top-K, optional keyword boost; return bookmark IDs + scores/snippets for "why matched"
-- Search service: `src/search/searchService.ts` — combine keyword filter + semantic retrieval, apply filters (folder, domain, date)
+- Retrieval: `src/search/retrieval.ts` (or similar) - load embeddings, cosine similarity, top-K, optional keyword boost; return bookmark IDs + scores/snippets for "why matched"
+- Search service: `src/search/searchService.ts` - combine keyword filter + semantic retrieval, apply filters (folder, domain, date)
 - UI: Search bar, filter controls (folder dropdown, domain, date range), results list with cards (title, URL, folder, "why matched")
 - Use existing `bookmarks` and `embeddings` stores; no backend
 
@@ -75,10 +75,10 @@ This document details the implementation milestones for ShelfEngine. Milestones 
 
 ## Milestone 5: Chat Interface
 
-**Goal:** Chat UI that treats each user message as a semantic query; display results as bookmark cards with "why matched." No LLM or generative responses — retrieval-only "chat."
+**Goal:** Chat UI that treats each user message as a semantic query; display results as bookmark cards with "why matched." No LLM or generative responses - retrieval-only "chat."
 
 **Key files / components:**
-- Chat UI: `src/components/Chat.tsx` (or `src/views/Chat.tsx`) — message list, input, send button
+- Chat UI: `src/components/Chat.tsx` (or `src/views/Chat.tsx`) - message list, input, send button
 - Behavior: on send, run same search/retrieval as Milestone 4 with message text as query; append user message + result cards to thread
 - Reuse: `searchService` and result card component from Milestone 4
 

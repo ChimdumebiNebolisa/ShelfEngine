@@ -81,8 +81,8 @@ flowchart LR
 
 ## Docs
 
-- [SPEC.md](SPEC.md) — Product and technical specification
-- [MILESTONES.md](MILESTONES.md) — Implementation milestones (goals, key files, done criteria)
+- [SPEC.md](SPEC.md) - Product and technical specification
+- [MILESTONES.md](MILESTONES.md) - Implementation milestones (goals, key files, done criteria)
 
 ## Development
 
