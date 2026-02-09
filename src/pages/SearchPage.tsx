@@ -6,6 +6,25 @@ import type { SearchFilters, SearchResult } from '../search/searchService';
 import SearchResultCard from '../components/SearchResultCard';
 
 const DEBOUNCE_MS = 380;
+const QUERY_HISTORY_KEY = 'shelfengine_query_history';
+const QUERY_HISTORY_MAX = 20;
+
+function loadQueryHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(QUERY_HISTORY_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.slice(0, QUERY_HISTORY_MAX) : [];
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveQueryHistory(history: string[]): void {
+  try {
+    localStorage.setItem(QUERY_HISTORY_KEY, JSON.stringify(history));
+  } catch { /* ignore */ }
+}
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
@@ -16,13 +35,37 @@ export default function SearchPage() {
   const [filterOptions, setFilterOptions] = useState<{ folders: string[]; domains: string[] }>({ folders: [], domains: [] });
   const [stats, setStats] = useState<{ total: number; withEmbedding: number } | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [showScore, setShowScore] = useState(false);
+  const [queryHistory, setQueryHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionPrefix, setSuggestionPrefix] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestVersionRef = useRef(0);
+
+  useEffect(() => {
+    setQueryHistory(loadQueryHistory());
+  }, []);
 
   useEffect(() => {
     getFilterOptions().then(setFilterOptions);
     getEmbeddingStats().then(setStats);
   }, []);
+
+  useEffect(() => {
+    const m = query.match(/(?:folder|site|domain):(.*)$/i);
+    if (m) {
+      const prefix = m[1].toLowerCase();
+      const op = query.slice(0, query.length - m[1].length).toLowerCase();
+      const list = op.startsWith('folder') ? filterOptions.folders : filterOptions.domains;
+      const filtered = list.filter((s) => s.toLowerCase().includes(prefix)).slice(0, 8);
+      setSuggestions(filtered);
+      setSuggestionPrefix(m[0].slice(0, -m[1].length));
+    } else {
+      setSuggestions([]);
+    }
+  }, [query, filterOptions.folders, filterOptions.domains]);
 
   const canSearch = stats != null && stats.total > 0;
   const queryNonEmpty = query.trim() !== '';
@@ -72,6 +115,13 @@ export default function SearchPage() {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
+    const q = query.trim();
+    if (q && queryNonEmpty) {
+      const next = [q, ...queryHistory.filter((h) => h !== q)].slice(0, QUERY_HISTORY_MAX);
+      setQueryHistory(next);
+      saveQueryHistory(next);
+    }
+    setHistoryIndex(-1);
     setLoading(true);
     setHasSearched(false);
     const version = ++requestVersionRef.current;
@@ -88,6 +138,25 @@ export default function SearchPage() {
         setLoading(false);
         setHasSearched(true);
       }
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowUp') {
+      if (queryHistory.length === 0) return;
+      e.preventDefault();
+      if (historyIndex < 0) draftRef.current = query;
+      const next = historyIndex < queryHistory.length - 1 ? historyIndex + 1 : 0;
+      setHistoryIndex(next);
+      setQuery(queryHistory[next]);
+    } else if (e.key === 'ArrowDown') {
+      if (historyIndex < 0) return;
+      e.preventDefault();
+      const next = historyIndex - 1;
+      setHistoryIndex(next);
+      setQuery(next < 0 ? draftRef.current : queryHistory[next]);
+    } else {
+      setHistoryIndex(-1);
     }
   }
 
@@ -113,16 +182,36 @@ export default function SearchPage() {
       )}
 
       <form onSubmit={handleSubmit} style={{ marginBottom: '1.5rem' }}>
-        <div style={{ marginBottom: '0.75rem' }}>
+        <div style={{ marginBottom: '0.75rem', position: 'relative', display: 'inline-block' }}>
           <input
+            ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder={canSearch ? 'Search by keyword or phrase...' : 'Build index on Import to enable search'}
             disabled={!canSearch}
             style={canSearch ? inputStyle : { ...inputStyle, backgroundColor: '#1e1e2e' }}
             autoFocus
           />
+          {suggestions.length > 0 && (
+            <ul style={suggestionsStyle}>
+              {suggestions.map((s) => (
+                <li key={s}>
+                  <button
+                    type="button"
+                    style={suggestionItemStyle}
+                    onClick={() => {
+                      setQuery(suggestionPrefix + s);
+                      setSuggestions([]);
+                    }}
+                  >
+                    {s}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           {canSearch && !queryNonEmpty && !hasSearched && (
             <p style={{ fontSize: '0.85rem', color: '#808090', marginTop: '0.35rem' }}>Type to search or enter a keyword or phrase.</p>
           )}
@@ -186,11 +275,17 @@ export default function SearchPage() {
       )}
 
       {results.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {results.map((r) => (
-            <SearchResultCard key={r.bookmark.id} result={r} />
-          ))}
-        </ul>
+        <>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+            <input type="checkbox" checked={showScore} onChange={(e) => setShowScore(e.target.checked)} />
+            Show similarity score
+          </label>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {results.map((r) => (
+              <SearchResultCard key={r.bookmark.id} result={r} showScore={showScore} />
+            ))}
+          </ul>
+        </>
       )}
 
       {hasSearched && !loading && results.length === 0 && canSearch && !error && (
@@ -227,5 +322,33 @@ const selectStyle: React.CSSProperties = {
   backgroundColor: '#252538',
   color: '#eaeaea',
   minWidth: 120,
+};
+
+const suggestionsStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '100%',
+  left: 0,
+  margin: 0,
+  padding: '0.25rem 0',
+  listStyle: 'none',
+  backgroundColor: '#252538',
+  border: '1px solid #2d2d44',
+  borderRadius: 4,
+  maxHeight: 200,
+  overflowY: 'auto',
+  zIndex: 10,
+  minWidth: 300,
+};
+
+const suggestionItemStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  padding: '0.35rem 0.75rem',
+  textAlign: 'left',
+  border: 'none',
+  backgroundColor: 'transparent',
+  color: '#eaeaea',
+  cursor: 'pointer',
+  fontSize: '0.9rem',
 };
 

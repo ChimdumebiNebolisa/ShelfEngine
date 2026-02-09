@@ -1,5 +1,10 @@
 import type { SearchResult } from '../search/searchService';
 
+interface SearchResultCardProps {
+  result: SearchResult;
+  showScore?: boolean;
+}
+
 const cardStyle: React.CSSProperties = {
   display: 'block',
   padding: '1rem',
@@ -28,12 +33,8 @@ function highlightText(text: string, terms: string[]): React.ReactNode {
   );
 }
 
-interface SearchResultCardProps {
-  result: SearchResult;
-}
-
-function SearchResultCard({ result }: SearchResultCardProps) {
-  const { bookmark, whyMatched, matchedTerms, score } = result;
+function SearchResultCard({ result, showScore = false }: SearchResultCardProps) {
+  const { bookmark, reasons, whyMatched, matchedTerms, score } = result;
   const title = bookmark.title || bookmark.url;
   const titleContent = matchedTerms?.length ? highlightText(title, matchedTerms) : title;
   const urlContent = matchedTerms?.length ? highlightText(bookmark.url, matchedTerms) : bookmark.url;
@@ -50,7 +51,9 @@ function SearchResultCard({ result }: SearchResultCardProps) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
           <span style={{ fontSize: '1rem', fontWeight: 600, color: '#7eb8da' }}>{titleContent}</span>
-          <span style={{ fontSize: '0.8rem', color: '#808090' }}>{scorePct}% match</span>
+          {showScore && (
+            <span style={{ fontSize: '0.8rem', color: '#808090' }}>{scorePct}% match</span>
+          )}
         </div>
         <div style={{ fontSize: '0.85rem', color: '#a0a0b0', wordBreak: 'break-all' }}>
           {urlContent}
@@ -61,7 +64,11 @@ function SearchResultCard({ result }: SearchResultCardProps) {
           </div>
         )}
         <div style={{ fontSize: '0.8rem', color: '#9ab8c8', marginTop: '0.35rem' }}>
-          {whyMatched}
+          {reasons?.length ? reasons.map((r) => {
+            if (r.type === 'semantic') return 'Relevant to your query';
+            if (r.type === 'phrase') return `Phrase match: ${r.phrase}`;
+            return `Matches in ${r.field}: ${r.terms.join(', ')}`;
+          }).join(' · ') : whyMatched}
         </div>
       </a>
     </li>

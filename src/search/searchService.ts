@@ -30,10 +30,16 @@ export interface SearchFilters {
   dateRange?: DateRangeFilter;
 }
 
+export type WhyMatchedReason =
+  | { type: 'semantic' }
+  | { type: 'keyword'; field: 'title' | 'folder' | 'site'; terms: string[] }
+  | { type: 'phrase'; phrase: string };
+
 export interface SearchResult {
   bookmark: Bookmark;
   score: number;
   whyMatched: string;
+  reasons: WhyMatchedReason[];
   matchedTerms?: string[];
 }
 
@@ -86,20 +92,36 @@ async function loadBookmarksAndEmbeddings(filters: SearchFilters): Promise<{
   };
 }
 
-function formatMatchedIn(m: MatchedIn): string {
-  if (m === 'folderPath') return 'folder';
-  return m;
+function buildReasons(keywordHit: KeywordHit | undefined, hasSemantic: boolean): WhyMatchedReason[] {
+  const reasons: WhyMatchedReason[] = [];
+  if (hasSemantic) reasons.push({ type: 'semantic' });
+  if (keywordHit?.matchedPhrases?.length) {
+    for (const p of keywordHit.matchedPhrases.slice(0, 1)) {
+      reasons.push({ type: 'phrase', phrase: p.phrase });
+      if (reasons.length >= 2) break;
+    }
+  }
+  if (reasons.length < 2 && keywordHit?.matchedTerms?.length && keywordHit.matchedIn.length > 0) {
+    const fieldMap: MatchedIn[] = ['title', 'folderPath', 'domain'];
+    for (const f of fieldMap) {
+      if (keywordHit.matchedIn.includes(f) && reasons.length < 2) {
+        const field = f === 'folderPath' ? 'folder' : f === 'domain' ? 'site' : 'title';
+        reasons.push({ type: 'keyword', field, terms: keywordHit.matchedTerms });
+        break;
+      }
+    }
+  }
+  if (reasons.length === 0) reasons.push({ type: 'semantic' });
+  return reasons.slice(0, 2);
 }
 
-function buildWhyMatched(keywordHit: KeywordHit | undefined, hasSemantic: boolean): string {
-  const keywordPart =
-    keywordHit && keywordHit.matchedTerms.length > 0
-      ? `Matches ${keywordHit.matchedTerms.map((t) => `'${t}'`).join(', ')}${keywordHit.matchedIn.length > 0 ? ` in ${keywordHit.matchedIn.map(formatMatchedIn).join(', ')}` : ''}`
-      : '';
-  const semanticPart = hasSemantic ? 'Relevant to your query' : '';
-  if (keywordPart && semanticPart) return `${keywordPart} and ${semanticPart.toLowerCase()}`;
-  if (keywordPart) return keywordPart;
-  return semanticPart || 'Relevant to your query';
+function formatReasons(reasons: WhyMatchedReason[]): string {
+  return reasons.map((r) => {
+    if (r.type === 'semantic') return 'Relevant to your query';
+    if (r.type === 'phrase') return `Phrase match: ${r.phrase}`;
+    const terms = r.terms.map((t) => `'${t}'`).join(', ');
+    return `Matches in ${r.field}: ${terms}`;
+  }).join(' · ');
 }
 
 const FILTER_ONLY_LIMIT = 50;
@@ -135,6 +157,7 @@ export async function search(
       bookmark: b,
       score: 1,
       whyMatched: 'Filtered results',
+      reasons: [],
     }));
   }
 
@@ -166,10 +189,12 @@ export async function search(
         score += RECENCY_BOOST_CAP;
       }
       score = Math.max(0, Math.min(1, score));
+      const reasons = buildReasons(kh, false);
       return {
         bookmark: b,
         score,
-        whyMatched: buildWhyMatched(kh, false),
+        whyMatched: formatReasons(reasons),
+        reasons,
         matchedTerms: kh.matchedTerms?.length ? kh.matchedTerms : undefined,
       };
     }).filter((r): r is SearchResult => r != null);
@@ -217,10 +242,12 @@ export async function search(
     combined = Math.max(0, Math.min(1, combined));
     if (combined < MIN_COMBINED_SCORE) continue;
 
+    const reasons = buildReasons(kh, semanticScore > 0);
     results.push({
       bookmark: b,
       score: combined,
-      whyMatched: buildWhyMatched(kh, semanticScore > 0),
+      whyMatched: formatReasons(reasons),
+      reasons,
       matchedTerms: kh?.matchedTerms && kh.matchedTerms.length > 0 ? kh.matchedTerms : undefined,
     });
   }
