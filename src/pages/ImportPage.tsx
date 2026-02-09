@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { runImport, type ImportMode } from '../import/importService';
+import { runImport, clearAllBookmarks, type ImportMode } from '../import/importService';
 import { buildIndex, getEmbeddingStats } from '../embeddings/embeddingService';
 
 export default function ImportPage() {
@@ -13,6 +13,7 @@ export default function ImportPage() {
   const [stats, setStats] = useState<{ total: number; withEmbedding: number } | null>(null);
   const [indexing, setIndexing] = useState(false);
   const [indexProgress, setIndexProgress] = useState<{ done: number; total: number; error: string | null } | null>(null);
+  const [clearing, setClearing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function refreshStats() {
@@ -55,10 +56,32 @@ export default function ImportPage() {
     if (!result.error) refreshStats();
   }
 
+  async function handleRemoveAll() {
+    if (!window.confirm('Remove all bookmarks and clear the index? This cannot be undone.')) return;
+    setClearing(true);
+    try {
+      await clearAllBookmarks();
+      setStatus(null);
+      refreshStats();
+    } finally {
+      setClearing(false);
+    }
+  }
+
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Import</h1>
       <p>Upload a Chrome bookmarks export (bookmarks.html).</p>
+
+      <details style={{ marginBottom: '1.5rem' }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How does this work?</summary>
+        <ol style={{ margin: '0.5rem 0 0 1.25rem', padding: 0, color: '#b0b0c0' }}>
+          <li>In Chrome, go to bookmarks and export (e.g. bookmarks.html).</li>
+          <li>Upload the file here and choose Merge or Replace.</li>
+          <li>Click &quot;Build index&quot; to generate embeddings for search.</li>
+          <li>Use Search or Chat to find bookmarks by keyword or natural language.</li>
+        </ol>
+      </details>
 
       <div style={{ marginBottom: '1rem' }}>
         <label style={{ display: 'block', marginBottom: '0.5rem' }}>Re-import behavior</label>
@@ -70,7 +93,7 @@ export default function ImportPage() {
             onChange={() => setMode('merge')}
             disabled={importing}
           />
-          {' '}Merge — keep existing, add new, skip duplicates
+          {' '}Merge (keep existing, add new, skip duplicates)
         </label>
         <label>
           <input
@@ -80,7 +103,7 @@ export default function ImportPage() {
             onChange={() => setMode('replace')}
             disabled={importing}
           />
-          {' '}Replace — clear all bookmarks and re-import
+          {' '}Replace (clear all bookmarks and re-import)
         </label>
       </div>
 
@@ -124,13 +147,23 @@ export default function ImportPage() {
             {' · '}
             Indexed: <strong>{stats.withEmbedding}</strong>
           </p>
-          <button
-            type="button"
-            onClick={handleBuildIndex}
-            disabled={indexing || stats.withEmbedding >= stats.total}
-          >
-            {indexing ? 'Indexing…' : 'Build index'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={handleBuildIndex}
+              disabled={indexing || stats.withEmbedding >= stats.total}
+            >
+              {indexing ? 'Indexing…' : 'Build index'}
+            </button>
+            <button
+              type="button"
+              onClick={handleRemoveAll}
+              disabled={importing || indexing || clearing}
+              style={{ backgroundColor: 'rgba(180,80,80,0.3)', border: '1px solid rgba(180,80,80,0.6)' }}
+            >
+              {clearing ? 'Removing…' : 'Remove all bookmarks'}
+            </button>
+          </div>
           {indexing && indexProgress && (
             <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
               Indexing… {indexProgress.done}/{indexProgress.total}

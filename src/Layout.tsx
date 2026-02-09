@@ -68,6 +68,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   main: {
     flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
     padding: '1.5rem',
     overflow: 'auto',
   },

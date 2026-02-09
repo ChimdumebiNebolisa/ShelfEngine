@@ -29,27 +29,25 @@ export default function ChatPage() {
 
     setInput('');
     const newTurn: ChatTurn = { query: trimmed, results: null, loading: true };
-    setTurns((prev) => [...prev, newTurn]);
+    setTurns([newTurn]);
 
     try {
       const results = await search(trimmed, {});
       setTurns((prev) => {
-        const next = [...prev];
-        const last = next[next.length - 1];
-        if (last && last.query === trimmed && last.loading) {
-          next[next.length - 1] = { ...last, results, loading: false };
+        const single = prev[0];
+        if (single && single.query === trimmed && single.loading) {
+          return [{ ...single, results, loading: false }];
         }
-        return next;
+        return prev;
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Search failed';
       setTurns((prev) => {
-        const next = [...prev];
-        const last = next[next.length - 1];
-        if (last && last.query === trimmed && last.loading) {
-          next[next.length - 1] = { ...last, results: [], loading: false, error: message };
+        const single = prev[0];
+        if (single && single.query === trimmed && single.loading) {
+          return [{ ...single, results: [], loading: false, error: message }];
         }
-        return next;
+        return prev;
       });
     }
   }
@@ -58,17 +56,35 @@ export default function ChatPage() {
   const sending = turns.some((t) => t.loading);
 
   return (
-    <div>
-      <h1 style={{ marginTop: 0 }}>Chat</h1>
-      <p>Ask in plain language; you&apos;ll get matching bookmarks with &quot;why matched&quot; — no AI reply, retrieval only.</p>
+    <div style={pageStyle}>
+      <div style={stickyHeaderStyle}>
+        <h1 style={{ marginTop: 0 }}>Chat</h1>
+        <p>Ask in plain language; you&apos;ll get matching bookmarks with &quot;why matched&quot; — no AI reply, retrieval only.</p>
 
-      {stats != null && stats.total > 0 && stats.withEmbedding === 0 && (
-        <p style={{ padding: '0.75rem', backgroundColor: 'rgba(200,160,80,0.2)', borderRadius: 4 }}>
-          No index yet. <Link to="/import">Import bookmarks</Link> and click &quot;Build index&quot; first.
-        </p>
-      )}
+        {stats != null && stats.total > 0 && stats.withEmbedding === 0 && (
+          <p style={{ padding: '0.75rem', backgroundColor: 'rgba(200,160,80,0.2)', borderRadius: 4 }}>
+            No index yet. <Link to="/import">Import bookmarks</Link> and click &quot;Build index&quot; first.
+          </p>
+        )}
 
-      <div style={{ marginBottom: '1.5rem' }}>
+        <form onSubmit={handleSubmit} style={{ marginTop: '1rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="e.g. that article about React hooks..."
+              disabled={!(stats != null && stats.withEmbedding > 0)}
+              style={inputStyle}
+            />
+            <button type="submit" disabled={!canSend || sending} style={buttonStyle}>
+              {sending ? '…' : 'Send'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div style={turnsAreaStyle}>
         {turns.map((turn, i) => (
           <div key={i} style={turnBlockStyle}>
             <div style={userBubbleStyle}>{turn.query}</div>
@@ -90,25 +106,31 @@ export default function ChatPage() {
           </div>
         ))}
       </div>
-
-      <form onSubmit={handleSubmit}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="e.g. that article about React hooks..."
-            disabled={!(stats != null && stats.withEmbedding > 0)}
-            style={inputStyle}
-          />
-          <button type="submit" disabled={!canSend || sending} style={buttonStyle}>
-            {sending ? '…' : 'Send'}
-          </button>
-        </div>
-      </form>
     </div>
   );
 }
+
+const pageStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: 0,
+  flex: 1,
+};
+
+const stickyHeaderStyle: React.CSSProperties = {
+  position: 'sticky',
+  top: 0,
+  zIndex: 1,
+  backgroundColor: '#1a1a2e',
+  paddingBottom: '1rem',
+  flexShrink: 0,
+};
+
+const turnsAreaStyle: React.CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  overflow: 'auto',
+};
 
 const turnBlockStyle: React.CSSProperties = {
   marginBottom: '1.25rem',

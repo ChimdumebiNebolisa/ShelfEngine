@@ -4,6 +4,12 @@ import { normalizeUrl, getDomain } from './normalizeUrl';
 
 export type ImportMode = 'merge' | 'replace';
 
+/** Clear all bookmarks and embeddings. */
+export async function clearAllBookmarks(): Promise<void> {
+  await db.bookmarks.clear();
+  await db.embeddings.clear();
+}
+
 export interface ImportResult {
   importId: number;
   status: 'success' | 'failure';
