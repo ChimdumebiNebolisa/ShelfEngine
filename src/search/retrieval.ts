@@ -4,9 +4,13 @@
  */
 
 import type { Bookmark } from '../db';
+import type { ParsedQuery } from './queryParse';
 
 const TOP_K = 10;
 const MIN_TERM_LENGTH = 2;
+
+const JUNK_TITLES = new Set(['home', 'untitled', 'default', 'new tab', 'bookmark', 'page']);
+const JUNK_TITLE_MAX_LEN = 4;
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -16,6 +20,17 @@ function termMatchesField(term: string, field: string): boolean {
   if (term.length < MIN_TERM_LENGTH) return false;
   const re = new RegExp(`\\b${escapeRegex(term)}\\b`, 'i');
   return re.test(field);
+}
+
+export function phraseMatchesField(text: string, phrase: string): boolean {
+  if (!phrase || !text) return false;
+  return text.toLowerCase().includes(phrase.toLowerCase());
+}
+
+export function isJunkTitle(title: string): boolean {
+  const t = (title ?? '').trim().toLowerCase();
+  if (t.length <= JUNK_TITLE_MAX_LEN) return true;
+  return JUNK_TITLES.has(t);
 }
 
 export function cosineSimilarity(a: number[], b: number[]): number {
@@ -72,6 +87,7 @@ export interface KeywordHit {
   matchedTerms: string[];
   matchedIn: MatchedIn[];
   score: number;
+  matchedPhrases?: { phrase: string; field: MatchedIn }[];
 }
 
 export function keywordSearch(bookmarks: Bookmark[], query: string): KeywordHit[] {
@@ -118,6 +134,146 @@ export function keywordSearch(bookmarks: Bookmark[], query: string): KeywordHit[
     if (matchedTerms.length > 0) {
       const termBonus = matchedTerms.length / terms.length;
       results.push({ bookmarkId: id, matchedTerms, matchedIn, score: score + termBonus });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results;
+}
+
+function bookmarkMatchesExclude(b: Bookmark, excludeTerms: string[]): boolean {
+  if (excludeTerms.length === 0) return false;
+  const title = (b.title ?? '').toLowerCase();
+  const url = (b.url ?? '').toLowerCase();
+  const folderPath = (b.folderPath ?? '').toLowerCase();
+  const domain = (b.domain ?? '').toLowerCase();
+  for (const term of excludeTerms) {
+    if (termMatchesField(term, title) || termMatchesField(term, url) ||
+        termMatchesField(term, folderPath) || termMatchesField(term, domain)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function bookmarkMatchesOrGroup(b: Bookmark, terms: string[]): boolean {
+  if (terms.length === 0) return false;
+  const title = (b.title ?? '').toLowerCase();
+  const url = (b.url ?? '').toLowerCase();
+  const folderPath = (b.folderPath ?? '').toLowerCase();
+  const domain = (b.domain ?? '').toLowerCase();
+  for (const term of terms) {
+    if (!termMatchesField(term, title) && !termMatchesField(term, url) &&
+        !termMatchesField(term, folderPath) && !termMatchesField(term, domain)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function scoreBookmarkTerms(b: Bookmark, terms: string[]): { matchedTerms: string[]; matchedIn: MatchedIn[]; score: number } {
+  const title = (b.title ?? '').toLowerCase();
+  const url = (b.url ?? '').toLowerCase();
+  const folderPath = (b.folderPath ?? '').toLowerCase();
+  const domain = (b.domain ?? '').toLowerCase();
+  const matchedTerms: string[] = [];
+  const matchedIn: MatchedIn[] = [];
+  let score = 0;
+  for (const term of terms) {
+    if (termMatchesField(term, title)) {
+      if (!matchedTerms.includes(term)) matchedTerms.push(term);
+      if (!matchedIn.includes('title')) matchedIn.push('title');
+      score += FIELD_WEIGHTS.title;
+    }
+    if (termMatchesField(term, url)) {
+      if (!matchedTerms.includes(term)) matchedTerms.push(term);
+      if (!matchedIn.includes('url')) matchedIn.push('url');
+      score += FIELD_WEIGHTS.url;
+    }
+    if (termMatchesField(term, folderPath)) {
+      if (!matchedTerms.includes(term)) matchedTerms.push(term);
+      if (!matchedIn.includes('folderPath')) matchedIn.push('folderPath');
+      score += FIELD_WEIGHTS.folderPath;
+    }
+    if (termMatchesField(term, domain)) {
+      if (!matchedTerms.includes(term)) matchedTerms.push(term);
+      if (!matchedIn.includes('domain')) matchedIn.push('domain');
+      score += FIELD_WEIGHTS.domain;
+    }
+  }
+  return { matchedTerms, matchedIn, score };
+}
+
+function phraseMatchesBookmark(b: Bookmark, phrase: string): { phrase: string; field: MatchedIn } | null {
+  const title = (b.title ?? '').toLowerCase();
+  const url = (b.url ?? '').toLowerCase();
+  const folderPath = (b.folderPath ?? '').toLowerCase();
+  const domain = (b.domain ?? '').toLowerCase();
+  const p = phrase.toLowerCase();
+  if (phraseMatchesField(title, p)) return { phrase, field: 'title' };
+  if (phraseMatchesField(url, p)) return { phrase, field: 'url' };
+  if (phraseMatchesField(folderPath, p)) return { phrase, field: 'folderPath' };
+  if (phraseMatchesField(domain, p)) return { phrase, field: 'domain' };
+  return null;
+}
+
+export function keywordSearchStructured(bookmarks: Bookmark[], parsed: ParsedQuery): KeywordHit[] {
+  const { terms, excludeTerms, phrases, orGroups } = parsed;
+  const hasTerms = terms.length > 0;
+  const hasPhrases = phrases.length > 0;
+  if (!hasTerms && !hasPhrases) return [];
+
+  const results: KeywordHit[] = [];
+  for (const b of bookmarks) {
+    if (b.id == null) continue;
+    if (bookmarkMatchesExclude(b, excludeTerms)) continue;
+
+    let matchedTerms: string[] = [];
+    const matchedIn: MatchedIn[] = [];
+    let score = 0;
+
+    if (orGroups.length > 1) {
+      let orMatch = false;
+      for (const group of orGroups) {
+        if (bookmarkMatchesOrGroup(b, group)) {
+          orMatch = true;
+          const r = scoreBookmarkTerms(b, group);
+          for (const t of r.matchedTerms) {
+            if (!matchedTerms.includes(t)) matchedTerms.push(t);
+          }
+          for (const f of r.matchedIn) {
+            if (!matchedIn.includes(f)) matchedIn.push(f);
+          }
+          score = Math.max(score, r.score);
+        }
+      }
+      if (!orMatch) continue;
+    } else if (hasTerms) {
+      const r = scoreBookmarkTerms(b, terms);
+      if (r.matchedTerms.length === 0) continue;
+      matchedTerms = r.matchedTerms;
+      matchedIn.push(...r.matchedIn);
+      score = r.score;
+    }
+
+    const matchedPhrases: { phrase: string; field: MatchedIn }[] = [];
+    for (const phrase of phrases) {
+      const pm = phraseMatchesBookmark(b, phrase);
+      if (pm) {
+        matchedPhrases.push(pm);
+        score += 2;
+      }
+    }
+
+    if (matchedTerms.length > 0 || matchedPhrases.length > 0) {
+      const termBonus = hasTerms ? matchedTerms.length / terms.length : 0;
+      results.push({
+        bookmarkId: b.id,
+        matchedTerms,
+        matchedIn: [...new Set(matchedIn)],
+        score: score + termBonus,
+        matchedPhrases: matchedPhrases.length > 0 ? matchedPhrases : undefined,
+      });
     }
   }
 

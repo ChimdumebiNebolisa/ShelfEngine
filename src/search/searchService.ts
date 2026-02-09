@@ -7,7 +7,7 @@ import { db } from '../db';
 import type { Bookmark } from '../db';
 import { embedQuery } from '../embeddings/embeddingService';
 import { parseQuery } from './queryParse';
-import { semanticTopK, keywordSearch } from './retrieval';
+import { semanticTopK, keywordSearch, keywordSearchStructured, isJunkTitle } from './retrieval';
 import type { KeywordHit, MatchedIn } from './retrieval';
 
 export type { ParsedQuery } from './queryParse';
@@ -16,6 +16,11 @@ const MIN_SEMANTIC_SCORE = 0.4;
 const MIN_SEMANTIC_ONLY_SCORE = 0.5;
 const MIN_COMBINED_SCORE = 0.2;
 const ALPHA = 0.55;
+const PHRASE_BOOST_CAP = 0.2;
+const PHRASE_BOOST_PER = 0.07;
+const JUNK_TITLE_PENALTY = 0.15;
+const RECENCY_BOOST_CAP = 0.05;
+const RECENCY_DAYS = 7;
 
 export type DateRangeFilter = 'any' | '7d' | '30d';
 
@@ -147,14 +152,25 @@ export async function search(
   );
 
   if (semanticItems.length === 0) {
-    const keywordHits = keywordSearch(filteredBookmarks, parsed.searchText || ' ');
+    const keywordHits = keywordSearchStructured(filteredBookmarks, parsed);
+    const maxKw = keywordHits.length > 0 ? Math.max(...keywordHits.map((kh) => kh.score), 1) : 1;
+    const queryTokenCount = parsed.terms.length + parsed.phrases.length;
+    const nowSec = Math.floor(Date.now() / 1000);
     return keywordHits.slice(0, 10).map((kh) => {
       const b = bookmarkById.get(kh.bookmarkId);
       if (!b) return null;
+      let score = Math.min(1, kh.score / maxKw);
+      score += Math.min(PHRASE_BOOST_CAP, (kh.matchedPhrases?.length ?? 0) * PHRASE_BOOST_PER);
+      if (isJunkTitle(b.title ?? '')) score -= JUNK_TITLE_PENALTY;
+      if (queryTokenCount <= 2 && b.addDate != null && (nowSec - b.addDate) <= RECENCY_DAYS * 24 * 3600) {
+        score += RECENCY_BOOST_CAP;
+      }
+      score = Math.max(0, Math.min(1, score));
       return {
         bookmark: b,
-        score: kh.score,
+        score,
         whyMatched: buildWhyMatched(kh, false),
+        matchedTerms: kh.matchedTerms?.length ? kh.matchedTerms : undefined,
       };
     }).filter((r): r is SearchResult => r != null);
   }
@@ -162,7 +178,7 @@ export async function search(
   const queryVector = await embedQuery(parsed.searchText || ' ');
   const semanticHitsRaw = semanticTopK(semanticItems, queryVector, 10);
   const semanticHits = semanticHitsRaw.filter((s) => s.score >= MIN_SEMANTIC_SCORE);
-  const keywordHits = keywordSearch(filteredBookmarks, parsed.searchText || ' ');
+  const keywordHits = keywordSearchStructured(filteredBookmarks, parsed);
   const keywordByBookmarkId = new Map(keywordHits.map((kh) => [kh.bookmarkId, kh]));
   const semanticByBookmarkId = new Map(semanticHits.map((s) => [s.bookmarkId, s.score]));
 
@@ -175,6 +191,9 @@ export async function search(
     ...semanticHits.map((s) => s.bookmarkId),
   ]);
 
+  const queryTokenCount = parsed.terms.length + parsed.phrases.length;
+  const nowSec = Math.floor(Date.now() / 1000);
+
   const results: SearchResult[] = [];
   for (const bookmarkId of candidateIds) {
     const b = bookmarkById.get(bookmarkId);
@@ -184,8 +203,20 @@ export async function search(
     const rawKeyword = kh?.score ?? 0;
     if (rawKeyword === 0 && semanticScore < MIN_SEMANTIC_ONLY_SCORE) continue;
     const normKeyword = Math.min(1, rawKeyword / maxKeywordScore);
-    const combined = ALPHA * semanticScore + (1 - ALPHA) * normKeyword;
+    let combined = ALPHA * semanticScore + (1 - ALPHA) * normKeyword;
+
+    const phraseCount = kh?.matchedPhrases?.length ?? 0;
+    combined += Math.min(PHRASE_BOOST_CAP, phraseCount * PHRASE_BOOST_PER);
+
+    if (isJunkTitle(b.title ?? '')) combined -= JUNK_TITLE_PENALTY;
+
+    if (queryTokenCount <= 2 && b.addDate != null && (nowSec - b.addDate) <= RECENCY_DAYS * 24 * 3600) {
+      combined += RECENCY_BOOST_CAP;
+    }
+
+    combined = Math.max(0, Math.min(1, combined));
     if (combined < MIN_COMBINED_SCORE) continue;
+
     results.push({
       bookmark: b,
       score: combined,
