@@ -126,7 +126,7 @@ export default function Layout({ children }: LayoutProps) {
           )}
         </nav>
       </aside>
-      <main style={{ ...styles.main, ...(isNarrow ? { paddingLeft: '3rem' } : {}) }}>{children}</main>
+      <main style={{ ...styles.main, ...(isNarrow ? { paddingLeft: '4.25rem' } : {}) }}>{children}</main>
     </div>
   );
 }
@@ -140,7 +140,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: 200,
     flexShrink: 0,
     borderRight: '1px solid #2d2d44',
-    padding: '1rem 0',
+    padding: '1rem 1.5rem',
     backgroundColor: '#1a1a2e',
   },
   nav: {
