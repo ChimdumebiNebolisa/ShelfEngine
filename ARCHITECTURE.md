@@ -11,12 +11,12 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 | Import | `src/import/parseBookmarksHtml.ts`, `src/import/importService.ts`, `src/import/normalizeUrl.ts` |
 | Embeddings | `src/embeddings/embeddingService.ts`, `src/workers/embedding.worker.ts` |
 | Search | `src/search/queryParse.ts`, `src/search/retrieval.ts`, `src/search/searchService.ts` |
-| Sync (extension bridge) | `src/sync/ingestDeltas.ts`, `src/App.tsx` (postMessage) |
+| Sync (extension bridge) | `src/sync/ingestDeltas.ts` (ingestDeltas, ingestResyncBatch), `src/App.tsx` (postMessage) |
 | App shell | `src/App.tsx`, `src/layouts/AppLayout.tsx`, `src/layouts/LandingLayout.tsx`, `src/main.tsx` |
 | Pages | `src/pages/LandingPage.tsx`, `ImportPage.tsx`, `SearchPage.tsx`, `ChatPage.tsx` |
 | Shared UI | `src/components/SearchResultCard.tsx`, `src/index.css` |
 | Build & PWA | `vite.config.ts`, `index.html` |
-| Extension | `extension/background.ts`, `extension/contentScript.ts`, `extension/manifest.json` |
+| Extension | `extension/background.ts`, `extension/contentScript.ts`, `extension/popup.html`, `extension/manifest.json` |
 
 ---
 
@@ -105,11 +105,11 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
    | imports        |
    +-------+--------+
            ^
-           | ingestDeltas() (from extension via postMessage in App)
+           | ingestDeltas() / ingestResyncBatch() (from extension via postMessage in App)
    +-------+--------+
    | extension      |
-   | background.ts  | → contentScript.ts → window.postMessage → App
-   | contentScript  |
+   | background.ts  | ← popup.html (RESYNC_ALL, status)
+   | contentScript  | → window.postMessage → App (SHELFENGINE_DELTAS, SHELFENGINE_RESYNC)
    +----------------+
 ```
 
@@ -117,7 +117,7 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 
 - **Import:** File → `parseBookmarksHtml` → `normalizeUrl` / dedupe → `db.bookmarks` (+ `db.imports`). User then clicks “Build index” → `buildIndex()` → worker embeds text → `db.embeddings`.
 - **Search/Chat:** User query → `parseQuery()` → `embedQuery()` (worker) → `loadBookmarksAndEmbeddings()` from Dexie → `semanticTopK` (k=50) + `keywordSearchStructured` in `retrieval.ts` → merge/rank in `searchService.search()` → strong results + related fallback → results with `whyMatched`, `matchTier` → `SearchResultCard`.
-- **Extension:** Background listens to `chrome.bookmarks`; pushes deltas to queue (or sends to content script); content script posts to window; `App` receives and calls `ingestDeltas()` → Dexie + `embedSingleBookmark()` for upserts.
+- **Extension:** Background listens to `chrome.bookmarks`; pushes deltas to queue (or sends to content script). Popup offers “Open ShelfEngine” and “Resync all bookmarks”; resync crawls `chrome.bookmarks.getTree()`, flattens with folderPath, stores pending batch and/or sends in chunks (500) to open ShelfEngine tab. Content script posts `SHELFENGINE_DELTAS` and `SHELFENGINE_RESYNC` to window; `App` receives and calls `ingestDeltas()` or `ingestResyncBatch()` (Path A: URL-canonical upsert only; embed only when bookmark has no embedding). App sends `SHELFENGINE_ACK` / `SHELFENGINE_RESYNC_ACK`; background clears queue / pending resync and sets last sync time.
 
 ---
 
@@ -286,7 +286,7 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 ### Permissions
 
 - **Web app:** No special permissions; standard storage (IndexedDB) and Web Worker. Optional network for first load and model fetch.
-- **Chrome extension** (when installed): `bookmarks` and `storage` in manifest; `host_permissions` for localhost (and 127.0.0.1) only in the repo, so the extension is intended for development/same-machine use.
+- **Chrome extension** (when installed): `bookmarks`, `storage`, `tabs` in manifest; `host_permissions` for `http://localhost/*`, `http://127.0.0.1/*`, and `https://shelf-engine.vercel.app/*`. Content script runs on those origins only. Extension is usable in development (localhost) and against the production app (shelf-engine.vercel.app).
 
 ### Threat model assumptions
 
@@ -310,7 +310,7 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 
 ### Known limitations
 
-- No automated tests. Large imports (e.g. many thousands of bookmarks) may exceed the 60 s target or memory. Extension host_permissions are localhost-only. Single embedding model; no model selection in UI. Chat does not keep multi-turn context for retrieval (each message is independent).
+- No automated tests. Large imports (e.g. many thousands of bookmarks) may exceed the 60 s target or memory. Single embedding model; no model selection in UI. Chat does not keep multi-turn context for retrieval (each message is independent).
 
 ---
 
@@ -321,13 +321,11 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 ### Implemented in repo today
 
 - **M1–M5** are implemented: PWA shell, Dexie schema, import (merge/replace), parsing, folder path, import tracking, Web Worker embeddings, search with filters and “why matched,” Chat UI over the same search.
-- **M6 (Chrome Extension)** bridge is **implemented**: `extension/background.ts` (bookmark listeners, delta queue in `chrome.storage.local`, send to tabs); `extension/contentScript.ts` (ShelfEngine origin only, postMessage to page, SHELFENGINE_READY → get queue, SHELFENGINE_ACK → clear queue); `src/App.tsx` (listens for `SHELFENGINE_DELTAS`, calls `ingestDeltas()`, posts `SHELFENGINE_ACK`); `src/sync/ingestDeltas.ts` (upsert/remove to Dexie, `embedSingleBookmark()` for upserts). So **extension sync when the app is open, and queue + flush on next open, are implemented.** The extension is built from `extension/background.ts` and `contentScript.ts` (e.g. `npm run build:extension`); manifest has host_permissions for localhost only.
+- **M6 (Chrome Extension)** bridge is **implemented**: `extension/background.ts` (bookmark listeners, delta queue in `chrome.storage.local`, send to tabs; RESYNC_ALL: `getTree()` → flatten with folderPath, URL-normalized; pending resync batch stored and sent in chunks of 500; GET_PENDING_RESYNC, RESYNC_ACK, last sync time); `extension/contentScript.ts` (ShelfEngine origin only, postMessage to page; SHELFENGINE_READY → get queue and pending resync, forward SHELFENGINE_DELTAS and SHELFENGINE_RESYNC chunks; SHELFENGINE_ACK / SHELFENGINE_RESYNC_ACK to background); `extension/popup.html` (Open ShelfEngine, Resync all bookmarks, status: Connected, Queue, Pending resync, Last sync); `src/App.tsx` (listens for `SHELFENGINE_DELTAS` and `SHELFENGINE_RESYNC`, calls `ingestDeltas()` or `ingestResyncBatch()`, posts ACKs); `src/sync/ingestDeltas.ts` (deltas: upsert/remove, `embedSingleBookmark()` for upserts; resync: `ingestResyncBatch()` — Path A URL-canonical upsert only, embed only when bookmark has no embedding). **Production origin** is enabled: manifest `host_permissions` and content_scripts include `https://shelf-engine.vercel.app/*` alongside localhost. Build: `npm run build:extension`; load unpacked from `extension` folder.
 
 ### Not implemented / optional / deferred
 
 - **OAuth / login:** Not implemented; SPEC defers optional Google OAuth for backup or multi-device to later.
-- **Production host for extension:** Manifest only allows localhost; extending to a production ShelfEngine origin would require adding that origin to `host_permissions` and building/releasing the extension.
-- **Full initial sync from extension:** The extension currently pushes deltas on create/change/move/remove; a one-time “sync all bookmarks” from Chrome into the app could be added but is not required by the current milestone.
 - **Backend, collaboration, mobile app, page-content fetching:** All out of scope per SPEC and GUARDRAILS.
 
 ---
