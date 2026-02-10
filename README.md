@@ -2,6 +2,8 @@
 
 Turn your bookmarks into a search engine.
 
+**[Live demo](https://shelf-engine.vercel.app/)**
+
 ShelfEngine is a **local-first web app** that lets you import your browser bookmarks once and later retrieve them using natural-language queries, search, and filters. All data stays on your device by default.
 
 ## Prerequisites
