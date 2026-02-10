@@ -79,3 +79,54 @@ export async function ingestDeltas(deltas: BookmarkDelta[]): Promise<{ applied: 
 
   return { applied, errors };
 }
+
+/** Resync item from extension (full bookmark row for URL-canonical upsert). */
+export type ResyncItem = {
+  url: string;
+  title: string;
+  folderPath: string;
+  addDate: number | null;
+  domain: string;
+};
+
+/**
+ * Ingest a full resync batch from the extension (Path A: URL-canonical, no destructive sync).
+ * Upserts by normalized url; only embeds bookmarks that do not yet have an embedding.
+ */
+export async function ingestResyncBatch(
+  items: ResyncItem[]
+): Promise<{ applied: number; errors: string[] }> {
+  const errors: string[] = [];
+  let applied = 0;
+
+  for (const u of items) {
+    try {
+      const url = normalizeUrl(u.url);
+      const domain = u.domain ?? getDomain(u.url);
+      const now = Date.now();
+      const existing = await db.bookmarks.where('url').equals(url).first();
+      const bookmark: Bookmark = {
+        ...(existing?.id != null ? { id: existing.id } : {}),
+        url,
+        title: (u.title || '').trim() || url,
+        domain,
+        folderPath: u.folderPath ?? '',
+        addDate: u.addDate ?? null,
+        createdAt: existing?.createdAt ?? now,
+      };
+      const id = await db.bookmarks.put(bookmark);
+      const saved = await db.bookmarks.get(id);
+      if (saved?.id != null) {
+        applied++;
+        const hasEmbedding = (await db.embeddings.where('bookmarkId').equals(saved.id).count()) > 0;
+        if (!hasEmbedding) {
+          await embedSingleBookmark(saved as Bookmark & { id: number });
+        }
+      }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return { applied, errors };
+}

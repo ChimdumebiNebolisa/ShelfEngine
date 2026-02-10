@@ -127,6 +127,15 @@ npm run build
 
 The extension runs on `localhost`, `127.0.0.1`, and `https://shelf-engine.vercel.app`. When the ShelfEngine app is open in a tab, bookmark changes are synced into the app; when it’s closed, deltas are queued and applied on next open.
 
+**Verification steps**
+
+1. `npm run build:extension`
+2. Load unpacked from the **`extension`** folder in Chrome (`chrome://extensions` → Developer mode → Load unpacked).
+3. Open **https://shelf-engine.vercel.app** in a tab.
+4. Click the extension icon, then **Resync all bookmarks**. Confirm bookmarks appear in the app (Search or Import view).
+5. Close the app tab, click **Resync all bookmarks** again, then reopen **https://shelf-engine.vercel.app**. Confirm the queued resync flushes and applies (bookmarks show up).
+6. Confirm the extension runs on both production origin (`https://shelf-engine.vercel.app`) and localhost (content script logs in the page console; service worker logs under the extension’s “Service worker” link).
+
 See [MILESTONES.md](docs/MILESTONES.md) for the full implementation plan and dependency order.
 
 ## License
