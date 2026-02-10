@@ -33,7 +33,7 @@ function highlightText(text: string, terms: string[]): React.ReactNode {
 }
 
 function SearchResultCard({ result }: SearchResultCardProps) {
-  const { bookmark, reasons, whyMatched, matchedTerms, score } = result;
+  const { bookmark, reasons, whyMatched, matchedTerms, score, matchTier } = result;
   const title = bookmark.title || bookmark.url;
   const titleContent = matchedTerms?.length ? highlightText(title, matchedTerms) : title;
   const urlContent = matchedTerms?.length ? highlightText(bookmark.url, matchedTerms) : bookmark.url;
@@ -50,6 +50,9 @@ function SearchResultCard({ result }: SearchResultCardProps) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
           <span style={{ fontSize: '1rem', fontWeight: 600, color: '#7eb8da' }}>{titleContent}</span>
+          {matchTier === 'related' && (
+            <span style={{ fontSize: '0.7rem', color: '#9ab8c8', fontStyle: 'italic' }}>Related match</span>
+          )}
           <span style={{ fontSize: '0.8rem', color: '#808090' }}>{scorePct}% match</span>
         </div>
         <div style={{ fontSize: '0.85rem', color: '#a0a0b0', wordBreak: 'break-all' }}>

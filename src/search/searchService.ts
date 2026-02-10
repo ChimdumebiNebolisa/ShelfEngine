@@ -12,9 +12,8 @@ import type { KeywordHit, MatchedIn } from './retrieval';
 
 export type { ParsedQuery } from './queryParse';
 
-const MIN_SEMANTIC_SCORE = 0.3;
-const MIN_SEMANTIC_ONLY_SCORE = 0.4;
 const MIN_COMBINED_SCORE = 0.2;
+const RELATED_SEMANTIC_FLOOR = 0.15;
 const ALPHA = 0.55;
 const PHRASE_BOOST_CAP = 0.2;
 const PHRASE_BOOST_PER = 0.07;
@@ -35,12 +34,15 @@ export type WhyMatchedReason =
   | { type: 'keyword'; field: 'title' | 'folder' | 'site'; terms: string[] }
   | { type: 'phrase'; phrase: string };
 
+export type MatchTier = 'strong' | 'related';
+
 export interface SearchResult {
   bookmark: Bookmark;
   score: number;
   whyMatched: string;
   reasons: WhyMatchedReason[];
   matchedTerms?: string[];
+  matchTier?: MatchTier;
 }
 
 function hasAnyFilter(filters: SearchFilters): boolean {
@@ -201,11 +203,10 @@ export async function search(
   }
 
   const queryVector = await embedQuery(parsed.searchText || ' ');
-  const semanticHitsRaw = semanticTopK(semanticItems, queryVector, 30);
-  const semanticHits = semanticHitsRaw.filter((s) => s.score >= MIN_SEMANTIC_SCORE);
+  const semanticHitsRaw = semanticTopK(semanticItems, queryVector, 50);
   const keywordHits = keywordSearchStructured(filteredBookmarks, parsed);
   const keywordByBookmarkId = new Map(keywordHits.map((kh) => [kh.bookmarkId, kh]));
-  const semanticByBookmarkId = new Map(semanticHits.map((s) => [s.bookmarkId, s.score]));
+  const semanticByBookmarkId = new Map(semanticHitsRaw.map((s) => [s.bookmarkId, s.score]));
 
   const maxKeywordScore = keywordHits.length > 0
     ? Math.max(...keywordHits.map((kh) => kh.score), 1)
@@ -213,7 +214,7 @@ export async function search(
 
   const candidateIds = new Set<number>([
     ...keywordHits.map((kh) => kh.bookmarkId),
-    ...semanticHits.map((s) => s.bookmarkId),
+    ...semanticHitsRaw.map((s) => s.bookmarkId),
   ]);
 
   const queryTokens = parsed.terms.length + parsed.phrases.length;
@@ -225,7 +226,6 @@ export async function search(
     const semantic = semanticByBookmarkId.get(bookmarkId) ?? 0;
     const kh = keywordByBookmarkId.get(bookmarkId);
     const rawKeyword = kh?.score ?? 0;
-    if (rawKeyword === 0 && semantic < MIN_SEMANTIC_ONLY_SCORE) continue;
     const keyword = Math.min(1, rawKeyword / maxKeywordScore);
     const phraseCount = kh?.matchedPhrases?.length ?? 0;
     const phraseBoost = Math.min(PHRASE_BOOST_CAP, phraseCount * PHRASE_BOOST_PER);
@@ -233,20 +233,43 @@ export async function search(
     const recencyBoost = (queryTokens <= 2 && isRecent(b)) ? RECENCY_BOOST_CAP : 0;
     const raw = ALPHA * semantic + (1 - ALPHA) * keyword + phraseBoost - junkPenalty + recencyBoost;
     const finalScore = Math.max(0, Math.min(1, raw));
-    if (finalScore < MIN_COMBINED_SCORE) continue;
 
     const reasons = buildReasons(kh, semantic > 0);
+    const isStrong = finalScore >= MIN_COMBINED_SCORE;
     results.push({
       bookmark: b,
       score: finalScore,
       whyMatched: formatReasons(reasons),
       reasons,
       matchedTerms: kh?.matchedTerms && kh.matchedTerms.length > 0 ? kh.matchedTerms : undefined,
+      matchTier: isStrong ? 'strong' : undefined,
     });
   }
 
   results.sort((a, b) => b.score - a.score);
-  return results.slice(0, 10);
+  const strongResults = results.filter((r) => r.matchTier === 'strong');
+  let finalResults = strongResults.slice(0, 10);
+
+  if (finalResults.length < 10 && semanticHitsRaw.length > 0) {
+    const strongIds = new Set(finalResults.map((r) => r.bookmark.id).filter((id): id is number => id != null));
+    const relatedCandidates = semanticHitsRaw
+      .filter((s) => s.score >= RELATED_SEMANTIC_FLOOR && !strongIds.has(s.bookmarkId))
+      .slice(0, 10 - finalResults.length);
+    for (const s of relatedCandidates) {
+      const b = bookmarkById.get(s.bookmarkId);
+      if (!b) continue;
+      finalResults.push({
+        bookmark: b,
+        score: s.score,
+        whyMatched: 'Relevant to your query',
+        reasons: [{ type: 'semantic' }],
+        matchTier: 'related',
+      });
+    }
+    finalResults.sort((a, b) => b.score - a.score);
+  }
+
+  return finalResults.slice(0, 10);
 }
 
 export async function getFilterOptions(): Promise<{
