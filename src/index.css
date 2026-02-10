@@ -64,16 +64,18 @@ a:focus-visible {
 
 /* Button states: transition and hover/active/disabled */
 .btn {
-  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease;
   padding: var(--space-2) var(--space-3);
   border-radius: 4px;
   font-size: 1rem;
 }
 .btn:hover:not(:disabled) {
-  filter: brightness(1.15);
+  filter: brightness(1.2);
+  box-shadow: 0 0 16px rgba(126, 184, 218, 0.35);
 }
 .btn:active:not(:disabled) {
   filter: brightness(0.9);
+  box-shadow: none;
 }
 .btn:disabled {
   opacity: 0.6;
@@ -86,12 +88,18 @@ a:focus-visible {
   color: #eaeaea;
   cursor: pointer;
 }
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(126, 184, 218, 0.45), 0 0 40px rgba(126, 184, 218, 0.2);
+}
 
 .btn-danger {
   border: 1px solid rgba(180, 80, 80, 0.6);
   background-color: rgba(180, 80, 80, 0.3);
   color: #eaeaea;
   cursor: pointer;
+}
+.btn-danger:hover:not(:disabled) {
+  box-shadow: 0 0 16px rgba(200, 100, 100, 0.4);
 }
 
 .btn-secondary {
@@ -100,15 +108,19 @@ a:focus-visible {
   color: #eaeaea;
   cursor: pointer;
 }
+.btn-secondary:hover:not(:disabled) {
+  box-shadow: 0 0 14px rgba(126, 184, 218, 0.3);
+}
 
 /* Card transition and hover for result cards */
 .result-card {
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   text-decoration: none;
   color: inherit;
 }
 .result-card:hover {
   background-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 20px rgba(126, 184, 218, 0.2), inset 0 0 0 1px rgba(126, 184, 218, 0.1);
   text-decoration: none;
 }
 
@@ -212,11 +224,12 @@ a:hover {
   color: #eaeaea;
   font-size: 0.9rem;
   text-decoration: none;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .example-chip:hover {
-  transform: translateY(-1px);
-  border-color: #3d5a80;
+  transform: translateY(-2px);
+  border-color: rgba(126, 184, 218, 0.5);
+  box-shadow: 0 0 18px rgba(126, 184, 218, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .landing-compact-list,
@@ -241,11 +254,11 @@ a:hover {
 @keyframes landing-hero-float {
   0%, 100% {
     transform: translateY(0) rotate(0deg);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25), 0 0 40px rgba(126, 184, 218, 0.08);
   }
   50% {
     transform: translateY(-10px) rotate(-0.6deg);
-    box-shadow: 0 28px 56px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 28px 56px rgba(0, 0, 0, 0.35), 0 0 60px rgba(126, 184, 218, 0.15);
   }
 }
 @keyframes landing-hero-fade-in {
@@ -330,12 +343,12 @@ a:hover {
   border: 1px solid rgba(126, 184, 218, 0.4) !important;
   color: #f0f4f8 !important;
   font-weight: 500;
-  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease !important;
+  transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease !important;
 }
 .hero2-btn-primary:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transform: translateY(-2px);
+  filter: brightness(1.15);
+  box-shadow: 0 0 24px rgba(126, 184, 218, 0.5), 0 0 48px rgba(126, 184, 218, 0.25), 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 .hero2-btn-primary:active {
   transform: translateY(0);
@@ -348,10 +361,11 @@ a:hover {
   background: rgba(255, 255, 255, 0.06) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   color: #eaeaea !important;
-  transition: filter 0.15s ease !important;
+  transition: filter 0.2s ease, box-shadow 0.2s ease !important;
 }
 .hero2-btn-secondary:hover {
-  filter: brightness(1.15);
+  filter: brightness(1.2);
+  box-shadow: 0 0 18px rgba(126, 184, 218, 0.3);
 }
 .landing-hero-trust {
   display: flex;
@@ -399,8 +413,8 @@ a:hover {
 .landing-hero-preview-card:hover {
   animation-play-state: paused;
   transform: scale(1.02);
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
-  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35), 0 0 40px rgba(126, 184, 218, 0.25), 0 0 80px rgba(126, 184, 218, 0.12);
+  border-color: rgba(126, 184, 218, 0.25);
 }
 @media (prefers-reduced-motion: reduce) {
   .landing-hero-preview-card {
