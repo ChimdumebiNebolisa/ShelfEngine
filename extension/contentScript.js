@@ -4,7 +4,9 @@
  * forwards to page via postMessage. Listens for SHELFENGINE_READY from page and SHELFENGINE_ACK to clear queue.
  */
 const SOURCE = 'shelfengine-extension';
+console.log('[ShelfEngine] content script injected on', window.location.href);
 function postToPage(type, payload) {
+    console.log('[ShelfEngine] content script posting to page', type, payload != null ? '(payload)' : '');
     window.postMessage({ source: SOURCE, type, payload }, window.location.origin);
 }
 window.addEventListener('message', (event) => {

@@ -114,15 +114,18 @@ Build for production:
 npm run build
 ```
 
-### Chrome extension (optional sync)
+### Load unpacked extension (dev)
 
-Build the extension, then load it in Chrome as an unpacked extension:
+1. Run the extension build:
+   ```bash
+   npm run build:extension
+   ```
+2. Open Chrome and go to `chrome://extensions`.
+3. Turn on **Developer mode** (toggle in the top right).
+4. Click **Load unpacked** and select the **`extension`** folder (the repo folder that contains `manifest.json`, `background.js`, `contentScript.js`, and `popup.html`). If you’re unsure, open the folder in Explorer and confirm those files are there.
+5. The extension card should appear with no errors. Click the **Service worker** link under “Inspect views” to open the background script console and see logs (e.g. when you create or change a bookmark).
 
-```bash
-npm run build:extension
-```
-
-In Chrome, go to `chrome://extensions`, enable "Developer mode", click "Load unpacked", and select the `extension` folder. The extension only runs on `localhost` and `127.0.0.1`; when the ShelfEngine app is open in a tab, bookmark changes in Chrome are synced into the app within a few seconds. When the app is closed, deltas are queued and applied on next open.
+The extension runs on `localhost`, `127.0.0.1`, and `https://shelf-engine.vercel.app`. When the ShelfEngine app is open in a tab, bookmark changes are synced into the app; when it’s closed, deltas are queued and applied on next open.
 
 See [MILESTONES.md](docs/MILESTONES.md) for the full implementation plan and dependency order.
 

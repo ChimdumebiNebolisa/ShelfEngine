@@ -5,7 +5,10 @@
 
 const SOURCE = 'shelfengine-extension';
 
+console.log('[ShelfEngine] content script injected on', window.location.href);
+
 function postToPage(type: string, payload?: unknown): void {
+  console.log('[ShelfEngine] content script posting to page', type, payload != null ? '(payload)' : '');
   window.postMessage({ source: SOURCE, type, payload }, window.location.origin);
 }
 

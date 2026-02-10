@@ -108,6 +108,7 @@ async function notifyApp() {
         await sendDeltasToApp(deltas);
 }
 chrome.bookmarks.onCreated.addListener(async (_id, node) => {
+    console.log('[ShelfEngine] bookmark onCreated', node.title ?? node.url);
     const upsert = await nodeToUpsert(node);
     if (!upsert)
         return;
@@ -115,6 +116,7 @@ chrome.bookmarks.onCreated.addListener(async (_id, node) => {
     await notifyApp();
 });
 chrome.bookmarks.onChanged.addListener(async (id) => {
+    console.log('[ShelfEngine] bookmark onChanged', id);
     const nodes = await chrome.bookmarks.get(id);
     const node = nodes[0];
     if (!node?.url)
@@ -126,6 +128,7 @@ chrome.bookmarks.onChanged.addListener(async (id) => {
     await notifyApp();
 });
 chrome.bookmarks.onMoved.addListener(async (id) => {
+    console.log('[ShelfEngine] bookmark onMoved', id);
     const nodes = await chrome.bookmarks.get(id);
     const node = nodes[0];
     if (!node?.url)
@@ -137,6 +140,7 @@ chrome.bookmarks.onMoved.addListener(async (id) => {
     await notifyApp();
 });
 chrome.bookmarks.onRemoved.addListener(async (_id, removeInfo) => {
+    console.log('[ShelfEngine] bookmark onRemoved', removeInfo.node?.title ?? removeInfo.node?.url);
     if (removeInfo.node?.url) {
         const url = normalizeUrl(removeInfo.node.url);
         await pushDelta({ remove: { url } });

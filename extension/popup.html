@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShelfEngine Sync</title>
+  <style>
+    body {
+      width: 220px;
+      padding: 12px 16px;
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+    }
+    h1 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    p {
+      margin: 0 0 12px 0;
+      color: #666;
+      font-size: 12px;
+    }
+    button {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+    }
+    button:hover {
+      background: #2a2a4e;
+    }
+  </style>
+</head>
+<body>
+  <h1>ShelfEngine Sync</h1>
+  <p>Status: loaded</p>
+  <button id="open">Open ShelfEngine</button>
+  <script>
+    document.getElementById('open').addEventListener('click', function () {
+      chrome.tabs.create({ url: 'https://shelf-engine.vercel.app' });
+    });
+  </script>
+</body>
+</html>

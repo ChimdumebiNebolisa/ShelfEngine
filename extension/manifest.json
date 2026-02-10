@@ -1,16 +1,28 @@
 {
   "manifest_version": 3,
   "name": "ShelfEngine Sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sync Chrome bookmarks to ShelfEngine when the app is open.",
-  "permissions": ["bookmarks", "storage"],
-  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*", "https://localhost/*", "https://127.0.0.1/*"],
+  "permissions": ["bookmarks", "storage", "tabs"],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://shelf-engine.vercel.app/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
+  "action": {
+    "default_title": "ShelfEngine Sync",
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
-      "matches": ["http://localhost/*", "http://127.0.0.1/*", "https://localhost/*", "https://127.0.0.1/*"],
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "https://shelf-engine.vercel.app/*"
+      ],
       "js": ["contentScript.js"],
       "run_at": "document_idle"
     }
