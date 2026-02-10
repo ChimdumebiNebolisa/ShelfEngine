@@ -12,8 +12,8 @@ import type { KeywordHit, MatchedIn } from './retrieval';
 
 export type { ParsedQuery } from './queryParse';
 
-const MIN_SEMANTIC_SCORE = 0.4;
-const MIN_SEMANTIC_ONLY_SCORE = 0.5;
+const MIN_SEMANTIC_SCORE = 0.3;
+const MIN_SEMANTIC_ONLY_SCORE = 0.4;
 const MIN_COMBINED_SCORE = 0.2;
 const ALPHA = 0.55;
 const PHRASE_BOOST_CAP = 0.2;
@@ -201,7 +201,7 @@ export async function search(
   }
 
   const queryVector = await embedQuery(parsed.searchText || ' ');
-  const semanticHitsRaw = semanticTopK(semanticItems, queryVector, 10);
+  const semanticHitsRaw = semanticTopK(semanticItems, queryVector, 30);
   const semanticHits = semanticHitsRaw.filter((s) => s.score >= MIN_SEMANTIC_SCORE);
   const keywordHits = keywordSearchStructured(filteredBookmarks, parsed);
   const keywordByBookmarkId = new Map(keywordHits.map((kh) => [kh.bookmarkId, kh]));
