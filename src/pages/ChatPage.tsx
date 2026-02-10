@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getEmbeddingStats } from '../embeddings/embeddingService';
-import { search, getFilterOptions } from '../search/searchService';
-import type { SearchFilters, SearchResult } from '../search/searchService';
+import { search } from '../search/searchService';
+import type { SearchResult } from '../search/searchService';
 import SearchResultCard from '../components/SearchResultCard';
 
 const QUERY_HISTORY_KEY = 'shelfengine_query_history';
@@ -36,18 +36,12 @@ export default function ChatPage() {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState('');
   const [stats, setStats] = useState<{ total: number; withEmbedding: number } | null>(null);
-  const [filters, setFilters] = useState<SearchFilters>({ dateRange: 'any' });
-  const [filterOptions, setFilterOptions] = useState<{ folders: string[]; domains: string[] }>({ folders: [], domains: [] });
-  const [showScore, setShowScore] = useState(false);
   const [queryHistory, setQueryHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [suggestionPrefix, setSuggestionPrefix] = useState('');
   const draftRef = useRef('');
 
   useEffect(() => {
     getEmbeddingStats().then(setStats);
-    getFilterOptions().then(setFilterOptions);
   }, []);
 
   useEffect(() => {
@@ -62,20 +56,6 @@ export default function ChatPage() {
     }
   }, []);
 
-  useEffect(() => {
-    const m = input.match(/(?:folder|site|domain):(.*)$/i);
-    if (m) {
-      const prefix = m[1].toLowerCase();
-      const op = input.slice(0, input.length - m[1].length).toLowerCase();
-      const list = op.startsWith('folder') ? filterOptions.folders : filterOptions.domains;
-      const filtered = list.filter((s) => s.toLowerCase().includes(prefix)).slice(0, 8);
-      setSuggestions(filtered);
-      setSuggestionPrefix(m[0].slice(0, -m[1].length));
-    } else {
-      setSuggestions([]);
-    }
-  }, [input, filterOptions.folders, filterOptions.domains]);
-
   async function runQuery(trimmed: string) {
     if (!trimmed || (stats != null && stats.withEmbedding === 0)) return;
     setInput('');
@@ -87,7 +67,7 @@ export default function ChatPage() {
     setTurns([newTurn]);
 
     try {
-      const results = await search(trimmed, filters);
+      const results = await search(trimmed, {});
       setTurns((prev) => {
         const single = prev[0];
         if (single && single.query === trimmed && single.loading) {
@@ -136,118 +116,35 @@ export default function ChatPage() {
   const noBookmarks = stats != null && stats.total === 0;
   const canSend = stats != null && stats.withEmbedding > 0 && input.trim() !== '';
   const sending = turns.some((t) => t.loading);
+  const isEmptyState =
+    noBookmarks ||
+    (stats != null && stats.total > 0 && stats.withEmbedding === 0) ||
+    (turns.length === 0 && stats != null && stats.withEmbedding > 0);
 
   return (
-    <div style={pageStyle}>
-      <div style={stickyHeaderStyle}>
-        <h1 style={{ marginTop: 0 }}>Chat</h1>
-        <p className="page-subtitle">Ask in plain language; you&apos;ll get matching bookmarks with why it matched as well as a similarity score.</p>
+    <div style={chatPageWrapperStyle}>
+      <div style={chatboxStyle}>
+      <header style={chatHeaderStyle}>
+        <h1 style={{ margin: 0, fontSize: '1.25rem' }}>Chat</h1>
+        <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#a0a0b0' }}>Ask in plain language to find your bookmarks</p>
+      </header>
 
+      <div style={getTurnsAreaStyle(isEmptyState)}>
         {noBookmarks && (
-          <div className="empty-state" style={{ marginBottom: '1rem' }}>
-            <p style={{ margin: '0 0 0.5rem 0' }}>No bookmarks yet. Import your Chrome bookmarks or try sample bookmarks to test the app.</p>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>Import</Link>
-              <Link to="/import" className="btn btn-secondary" style={{ display: 'inline-block', textDecoration: 'none' }}>Try sample bookmarks</Link>
-            </div>
+          <div style={emptyStateStyle}>
+            <p style={{ margin: '0 0 0.5rem 0', color: '#a0a0b0' }}>No bookmarks yet. Import your Chrome bookmarks to get started.</p>
+            <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>Import bookmarks</Link>
           </div>
         )}
-
         {stats != null && stats.total > 0 && stats.withEmbedding === 0 && (
-          <div style={{ padding: '0.75rem', backgroundColor: 'rgba(200,160,80,0.2)', borderRadius: 4, marginBottom: '1rem' }}>
-            <p style={{ margin: '0 0 0.5rem 0' }}>No index yet. Import bookmarks and click &quot;Build index&quot; first.</p>
+          <div style={emptyStateStyle}>
+            <p style={{ margin: '0 0 0.5rem 0', color: '#a0a0b0' }}>No index yet. Import bookmarks and click &quot;Build index&quot; first.</p>
             <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>Go to Import</Link>
           </div>
         )}
-
-        <details style={{ marginBottom: '0.75rem' }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 600, marginBottom: '0.5rem' }}>Filters</summary>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-            <label style={labelStyle}>
-              Folder
-              <select
-                value={filters.folder ?? ''}
-                onChange={(e) => setFilters((f) => ({ ...f, folder: e.target.value || undefined }))}
-                style={selectStyle}
-              >
-                <option value="">All</option>
-                {filterOptions.folders.map((f) => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-            </label>
-            <label style={labelStyle}>
-              Domain
-              <select
-                value={filters.domain ?? ''}
-                onChange={(e) => setFilters((f) => ({ ...f, domain: e.target.value || undefined }))}
-                style={selectStyle}
-              >
-                <option value="">All</option>
-                {filterOptions.domains.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </label>
-            <label style={labelStyle}>
-              Date added
-              <select
-                value={filters.dateRange ?? 'any'}
-                onChange={(e) => setFilters((f) => ({ ...f, dateRange: (e.target.value as SearchFilters['dateRange']) ?? 'any' }))}
-                style={selectStyle}
-              >
-                <option value="any">Any</option>
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
-              </select>
-            </label>
-          </div>
-        </details>
-        <form onSubmit={handleSubmit} style={{ marginTop: '1rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', position: 'relative', flex: 1, maxWidth: 500 }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={noBookmarks ? 'Import bookmarks to get started' : (stats != null && stats.withEmbedding > 0 ? 'e.g. that article about React hooks...' : 'Build index on Import to enable search')}
-                disabled={noBookmarks || !(stats != null && stats.withEmbedding > 0)}
-                style={noBookmarks || !(stats != null && stats.withEmbedding > 0) ? { ...inputStyle, backgroundColor: '#1e1e2e' } : inputStyle}
-              />
-              {suggestions.length > 0 && (
-                <ul style={suggestionsStyle}>
-                  {suggestions.map((s) => (
-                    <li key={s}>
-                      <button
-                        type="button"
-                        style={suggestionItemStyle}
-                        onClick={() => {
-                          setInput(suggestionPrefix + s);
-                          setSuggestions([]);
-                        }}
-                      >
-                        {s}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <button type="submit" disabled={noBookmarks || !canSend || sending} className="btn btn-primary" title={noBookmarks ? 'Import bookmarks first' : undefined} style={{ flexShrink: 0 }}>
-              {sending ? '…' : 'Send'}
-            </button>
-          </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem' }}>
-            <input type="checkbox" checked={showScore} onChange={(e) => setShowScore(e.target.checked)} />
-            Show similarity score
-          </label>
-        </form>
-      </div>
-
-      <div style={turnsAreaStyle}>
         {turns.length === 0 && stats != null && stats.withEmbedding > 0 && (
           <div style={emptyStateStyle}>
+            <p style={{ margin: '0 0 0.75rem 0', color: '#808090' }}>Try a query:</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {['that article about React hooks', 'tutorials I saved'].map((example) => (
                 <button
@@ -263,71 +160,122 @@ export default function ChatPage() {
             </div>
           </div>
         )}
-        {turns.map((turn, i) => (
+        {!noBookmarks && stats != null && stats.withEmbedding > 0 && turns.map((turn, i) => (
           <div key={i} style={turnBlockStyle}>
             <div style={userBubbleWrapStyle}>
               <div style={userBubbleStyle}>{turn.query}</div>
             </div>
             {turn.loading && (
-              <div style={metaStyle}>
-                <span className="spinner" aria-hidden />
+              <div style={{ ...assistantBubbleStyle, padding: '0.75rem 1rem' }}>
+                <span className="spinner" aria-hidden style={{ marginRight: '0.5rem' }} />
                 Searching…
               </div>
             )}
-            {turn.error && <div style={errorStyle}>{turn.error}</div>}
+            {turn.error && (
+              <div style={{ ...assistantBubbleStyle, padding: '0.75rem 1rem', borderColor: 'rgba(224,160,160,0.3)' }}>
+                <span style={{ color: '#e0a0a0' }}>{turn.error}</span>
+              </div>
+            )}
             {!turn.loading && turn.results !== null && (
               <>
                 {turn.results.length === 0 ? (
-                  <div className="empty-state" style={{ marginTop: '0.25rem' }}>
-                    <p style={{ margin: 0 }}>No bookmarks match your query.</p>
+                  <div style={{ ...assistantBubbleStyle, padding: '0.75rem 1rem' }}>
+                    <p style={{ margin: 0, color: '#a0a0b0' }}>No bookmarks match your query.</p>
                   </div>
                 ) : (
-                  <>
-                    <div style={{ fontSize: '0.85rem', color: '#808090', marginBottom: '0.35rem' }}>Matches</div>
+                  <div style={assistantBubbleStyle}>
+                    <div style={{ fontSize: '0.8rem', color: '#808090', marginBottom: '0.5rem' }}>Matches</div>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                       {turn.results.map((r) => (
-                        <SearchResultCard key={r.bookmark.id} result={r} showScore={showScore} />
+                        <SearchResultCard key={r.bookmark.id} result={r} />
                       ))}
                     </ul>
-                  </>
+                  </div>
                 )}
               </>
             )}
           </div>
         ))}
       </div>
+
+      <form onSubmit={handleSubmit} style={inputBarStyle}>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={noBookmarks ? 'Import bookmarks to get started' : (stats != null && stats.withEmbedding > 0 ? 'Ask about your bookmarks...' : 'Build index on Import to enable search')}
+          disabled={noBookmarks || !(stats != null && stats.withEmbedding > 0)}
+          style={noBookmarks || !(stats != null && stats.withEmbedding > 0) ? { ...inputFieldStyle, backgroundColor: '#1e1e2e', opacity: 0.8 } : inputFieldStyle}
+          autoFocus
+        />
+        <button type="submit" disabled={noBookmarks || !canSend || sending} className="btn btn-primary" title={noBookmarks ? 'Import bookmarks first' : undefined} style={sendButtonStyle}>
+          {sending ? '…' : 'Send'}
+        </button>
+      </form>
+      </div>
     </div>
   );
 }
 
-const pageStyle: React.CSSProperties = {
+const chatPageWrapperStyle: React.CSSProperties = {
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  width: '100%',
+  minHeight: 0,
+};
+
+const chatboxStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   minHeight: 0,
   flex: 1,
-};
-
-const stickyHeaderStyle: React.CSSProperties = {
-  position: 'sticky',
-  top: 0,
-  zIndex: 1,
+  width: '100%',
+  maxWidth: 800,
   backgroundColor: '#1a1a2e',
-  paddingBottom: '1rem',
-  flexShrink: 0,
+  borderRadius: 8,
+  border: '1px solid #2d2d44',
+  overflow: 'hidden',
 };
 
-const turnsAreaStyle: React.CSSProperties = {
+const chatHeaderStyle: React.CSSProperties = {
+  padding: '1rem 1.25rem',
+  borderBottom: '1px solid #2d2d44',
+  flexShrink: 0,
+  backgroundColor: '#1a1a2e',
+};
+
+const getTurnsAreaStyle = (isEmptyState: boolean): React.CSSProperties => ({
   flex: 1,
   minHeight: 0,
   overflow: 'auto',
-};
+  padding: '1rem 1.25rem',
+  ...(isEmptyState && {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+  }),
+});
 
 const turnBlockStyle: React.CSSProperties = {
   marginBottom: '1.25rem',
 };
 
+const assistantBubbleStyle: React.CSSProperties = {
+  padding: '1rem',
+  borderRadius: 12,
+  borderBottomLeftRadius: 4,
+  backgroundColor: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.06)',
+  maxWidth: '100%',
+  marginRight: 'auto',
+  alignSelf: 'flex-start',
+};
+
 const emptyStateStyle: React.CSSProperties = {
-  padding: '1.5rem 0',
+  padding: '1.5rem 1rem',
 };
 
 const userBubbleWrapStyle: React.CSSProperties = {
@@ -336,79 +284,39 @@ const userBubbleWrapStyle: React.CSSProperties = {
 };
 
 const userBubbleStyle: React.CSSProperties = {
-  padding: '0.5rem 0.75rem',
-  borderRadius: 4,
-  backgroundColor: 'rgba(126, 184, 218, 0.15)',
-  borderLeft: '3px solid #7eb8da',
-  maxWidth: '80%',
+  padding: '0.6rem 1rem',
+  borderRadius: 12,
+  borderBottomRightRadius: 4,
+  backgroundColor: 'rgba(126, 184, 218, 0.2)',
+  maxWidth: '85%',
   marginLeft: 'auto',
   alignSelf: 'flex-end',
+  fontSize: '0.95rem',
 };
 
-const metaStyle: React.CSSProperties = {
-  fontSize: '0.9rem',
-  color: '#a0a0b0',
-  marginTop: '0.25rem',
+const inputBarStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '0.5rem',
+  padding: '1rem 1.25rem',
+  borderTop: '1px solid #2d2d44',
+  backgroundColor: '#1a1a2e',
+  flexShrink: 0,
 };
 
-const errorStyle: React.CSSProperties = {
-  fontSize: '0.9rem',
-  color: '#e0a0a0',
-  marginTop: '0.25rem',
-};
-
-const inputStyle: React.CSSProperties = {
+const inputFieldStyle: React.CSSProperties = {
   flex: 1,
-  maxWidth: 400,
-  padding: '0.5rem 0.75rem',
+  padding: '0.75rem 1rem',
   fontSize: '1rem',
   border: '1px solid #2d2d44',
-  borderRadius: 4,
+  borderRadius: 24,
   backgroundColor: '#252538',
   color: '#eaeaea',
+  outline: 'none',
 };
 
-const labelStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.5rem',
-  fontSize: '0.9rem',
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: '0.35rem 0.5rem',
-  border: '1px solid #2d2d44',
-  borderRadius: 4,
-  backgroundColor: '#252538',
-  color: '#eaeaea',
-  minWidth: 120,
-};
-
-const suggestionsStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  left: 0,
-  right: 0,
-  margin: 0,
-  padding: '0.25rem 0',
-  listStyle: 'none',
-  backgroundColor: '#252538',
-  border: '1px solid #2d2d44',
-  borderRadius: 4,
-  maxHeight: 200,
-  overflowY: 'auto',
-  zIndex: 10,
-};
-
-const suggestionItemStyle: React.CSSProperties = {
-  display: 'block',
-  width: '100%',
-  padding: '0.35rem 0.75rem',
-  textAlign: 'left',
-  border: 'none',
-  backgroundColor: 'transparent',
-  color: '#eaeaea',
-  cursor: 'pointer',
-  fontSize: '0.9rem',
+const sendButtonStyle: React.CSSProperties = {
+  flexShrink: 0,
+  borderRadius: 24,
+  padding: '0.75rem 1.25rem',
 };
 

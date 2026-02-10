@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import HeroPreview from '../components/HeroPreview';
 
 const PREFILL_KEY = 'shelfengine_prefill';
 
@@ -15,16 +16,29 @@ export default function LandingPage() {
 
   return (
     <div>
-      <section className="hero">
-        <h1 className="hero-headline">A search engine for your bookmarks.</h1>
-        <p className="hero-subtitle">Type what you remember using keywords or natural language. All on your device.</p>
-        <div className="hero-cta">
-          <Link to="/import" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>
-            Import bookmarks
-          </Link>
-          <Link to="/import" className="btn btn-secondary" style={{ display: 'inline-block', textDecoration: 'none', marginLeft: '0.5rem' }}>
-            Try sample bookmarks
-          </Link>
+      <section className="landing-hero" aria-label="Hero">
+        <div className="landing-hero-inner">
+          <div className="landing-hero-content">
+            <span className="landing-hero-badge">Privacy-first bookmark search</span>
+            <h1 className="landing-hero-headline">The search engine for your bookmarks.</h1>
+            <p className="landing-hero-subheadline">Stop losing links you know you saved. Import bookmarks once, then search by keyword or natural language, all in your browser.</p>
+            <div className="landing-hero-cta">
+              <Link to="/import" className="btn hero2-btn-primary">
+                Import bookmarks →
+              </Link>
+              <Link to="/import" className="btn hero2-btn-secondary">
+                Try sample bookmarks
+              </Link>
+            </div>
+            <div className="landing-hero-trust">
+              <span className="landing-hero-trust-item">IndexedDB storage</span>
+              <span className="landing-hero-trust-item">Embeddings in a Web Worker</span>
+              <span className="landing-hero-trust-item">No account, no server</span>
+            </div>
+          </div>
+          <div className="landing-hero-preview">
+            <HeroPreview />
+          </div>
         </div>
       </section>
 

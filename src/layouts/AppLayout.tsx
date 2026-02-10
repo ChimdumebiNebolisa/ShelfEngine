@@ -3,11 +3,11 @@ import { Link, useLocation } from 'react-router-dom';
 
 const SIDEBAR_BREAKPOINT = 768;
 
-interface LayoutProps {
+interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-export default function Layout({ children }: LayoutProps) {
+export default function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isNarrow, setIsNarrow] = useState(typeof window !== 'undefined' && window.innerWidth < SIDEBAR_BREAKPOINT);
@@ -180,5 +180,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '1.5rem',
     overflow: 'auto',
     maxWidth: 800,
+    marginLeft: 'auto',
+    marginRight: 'auto',
   },
 };

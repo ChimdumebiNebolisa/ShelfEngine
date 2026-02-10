@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { db } from './db';
-import Layout from './Layout';
+import AppLayout from './layouts/AppLayout';
+import LandingLayout from './layouts/LandingLayout';
 import ChatPage from './pages/ChatPage';
 import ImportPage from './pages/ImportPage';
 import LandingPage from './pages/LandingPage';
@@ -57,14 +58,12 @@ function App() {
   }
 
   return (
-    <Layout>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/import" element={<ImportPage />} />
-      </Routes>
-    </Layout>
+    <Routes>
+      <Route path="/" element={<LandingLayout><LandingPage /></LandingLayout>} />
+      <Route path="/import" element={<AppLayout><ImportPage /></AppLayout>} />
+      <Route path="/search" element={<AppLayout><SearchPage /></AppLayout>} />
+      <Route path="/chat" element={<AppLayout><ChatPage /></AppLayout>} />
+    </Routes>
   );
 }
 

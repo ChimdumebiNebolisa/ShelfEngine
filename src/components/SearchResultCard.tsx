@@ -2,7 +2,6 @@ import type { SearchResult } from '../search/searchService';
 
 interface SearchResultCardProps {
   result: SearchResult;
-  showScore?: boolean;
 }
 
 const cardStyle: React.CSSProperties = {
@@ -33,7 +32,7 @@ function highlightText(text: string, terms: string[]): React.ReactNode {
   );
 }
 
-function SearchResultCard({ result, showScore = false }: SearchResultCardProps) {
+function SearchResultCard({ result }: SearchResultCardProps) {
   const { bookmark, reasons, whyMatched, matchedTerms, score } = result;
   const title = bookmark.title || bookmark.url;
   const titleContent = matchedTerms?.length ? highlightText(title, matchedTerms) : title;
@@ -51,9 +50,7 @@ function SearchResultCard({ result, showScore = false }: SearchResultCardProps) 
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
           <span style={{ fontSize: '1rem', fontWeight: 600, color: '#7eb8da' }}>{titleContent}</span>
-          {showScore && (
-            <span style={{ fontSize: '0.8rem', color: '#808090' }}>{scorePct}% match</span>
-          )}
+          <span style={{ fontSize: '0.8rem', color: '#808090' }}>{scorePct}% match</span>
         </div>
         <div style={{ fontSize: '0.85rem', color: '#a0a0b0', wordBreak: 'break-all' }}>
           {urlContent}

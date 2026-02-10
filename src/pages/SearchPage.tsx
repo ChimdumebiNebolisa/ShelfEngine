@@ -35,7 +35,6 @@ export default function SearchPage() {
   const [filterOptions, setFilterOptions] = useState<{ folders: string[]; domains: string[] }>({ folders: [], domains: [] });
   const [stats, setStats] = useState<{ total: number; withEmbedding: number } | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
-  const [showScore, setShowScore] = useState(false);
   const [queryHistory, setQueryHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -275,17 +274,11 @@ export default function SearchPage() {
       )}
 
       {results.length > 0 && (
-        <>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-            <input type="checkbox" checked={showScore} onChange={(e) => setShowScore(e.target.checked)} />
-            Show similarity score
-          </label>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {results.map((r) => (
-              <SearchResultCard key={r.bookmark.id} result={r} showScore={showScore} />
-            ))}
-          </ul>
-        </>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {results.map((r) => (
+            <SearchResultCard key={r.bookmark.id} result={r} />
+          ))}
+        </ul>
       )}
 
       {hasSearched && !loading && results.length === 0 && canSearch && !error && (
