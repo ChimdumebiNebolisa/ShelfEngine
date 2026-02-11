@@ -15,7 +15,7 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function termMatchesField(term: string, field: string): boolean {
+export function termMatchesField(term: string, field: string): boolean {
   if (term.length < MIN_TERM_LENGTH) return false;
   const re = new RegExp(`\\b${escapeRegex(term)}\\b`, 'i');
   return re.test(field);
@@ -96,6 +96,49 @@ export interface KeywordHit {
   matchedPhrases?: { phrase: string; field: MatchedIn }[];
 }
 
+export function inferKeywordSignals(
+  bookmark: Bookmark,
+  parsed: ParsedQuery
+): Omit<KeywordHit, 'bookmarkId' | 'score'> {
+  const title = (bookmark.title ?? '').toLowerCase();
+  const url = (bookmark.url ?? '').toLowerCase();
+  const folderPath = (bookmark.folderPath ?? '').toLowerCase();
+  const domain = (bookmark.domain ?? '').toLowerCase();
+  const fields: Array<{ key: MatchedIn; value: string }> = [
+    { key: 'title', value: title },
+    { key: 'url', value: url },
+    { key: 'folderPath', value: folderPath },
+    { key: 'domain', value: domain },
+  ];
+
+  const matchedTerms: string[] = [];
+  const matchedIn: MatchedIn[] = [];
+  for (const term of parsed.terms) {
+    for (const field of fields) {
+      if (termMatchesField(term, field.value)) {
+        if (!matchedTerms.includes(term)) matchedTerms.push(term);
+        if (!matchedIn.includes(field.key)) matchedIn.push(field.key);
+      }
+    }
+  }
+
+  const matchedPhrases: { phrase: string; field: MatchedIn }[] = [];
+  for (const phrase of parsed.phrases) {
+    for (const field of fields) {
+      if (phraseMatchesField(field.value, phrase)) {
+        matchedPhrases.push({ phrase, field: field.key });
+        break;
+      }
+    }
+  }
+
+  return {
+    matchedTerms,
+    matchedIn,
+    matchedPhrases: matchedPhrases.length > 0 ? matchedPhrases : undefined,
+  };
+}
+
 export function keywordSearch(bookmarks: Bookmark[], query: string): KeywordHit[] {
   const terms = tokenizeQuery(query);
   if (terms.length === 0) return [];
@@ -147,7 +190,7 @@ export function keywordSearch(bookmarks: Bookmark[], query: string): KeywordHit[
   return results;
 }
 
-function bookmarkMatchesExclude(b: Bookmark, excludeTerms: string[]): boolean {
+export function bookmarkMatchesExclude(b: Bookmark, excludeTerms: string[]): boolean {
   if (excludeTerms.length === 0) return false;
   const title = (b.title ?? '').toLowerCase();
   const url = (b.url ?? '').toLowerCase();
@@ -162,7 +205,7 @@ function bookmarkMatchesExclude(b: Bookmark, excludeTerms: string[]): boolean {
   return false;
 }
 
-function bookmarkMatchesOrGroup(b: Bookmark, terms: string[]): boolean {
+export function bookmarkMatchesOrGroup(b: Bookmark, terms: string[]): boolean {
   if (terms.length === 0) return false;
   const title = (b.title ?? '').toLowerCase();
   const url = (b.url ?? '').toLowerCase();

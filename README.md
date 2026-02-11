@@ -114,6 +114,16 @@ Build for production:
 npm run build
 ```
 
+### Search harness (dev-only)
+
+Run the app in dev mode, open the browser console, and call:
+
+```js
+window.runSearchHarness()
+```
+
+This runs a small set of sample queries through `search()` and logs the top results (title, url, score, whyMatched).
+
 ### Load unpacked extension (dev)
 
 1. Run the extension build:

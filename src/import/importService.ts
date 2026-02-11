@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { parseBookmarksHtml } from './parseBookmarksHtml';
 import { normalizeUrl, getDomain } from './normalizeUrl';
+import { invalidateMiniIndex } from '../search/miniIndex';
 
 export type ImportMode = 'merge' | 'replace';
 
@@ -8,6 +9,7 @@ export type ImportMode = 'merge' | 'replace';
 export async function clearAllBookmarks(): Promise<void> {
   await db.bookmarks.clear();
   await db.embeddings.clear();
+  invalidateMiniIndex();
 }
 
 export interface ImportResult {
@@ -74,6 +76,7 @@ export async function runImport(
       counts,
       error: null,
     });
+    invalidateMiniIndex();
 
     return {
       importId,

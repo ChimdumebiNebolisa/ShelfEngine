@@ -7,6 +7,7 @@ import { db } from '../db';
 import type { Bookmark } from '../db';
 import { normalizeUrl, getDomain } from '../import/normalizeUrl';
 import { embedSingleBookmark } from '../embeddings/embeddingService';
+import { invalidateMiniIndex } from '../search/miniIndex';
 
 export type DeltaUpsert = {
   url: string;
@@ -77,6 +78,7 @@ export async function ingestDeltas(deltas: BookmarkDelta[]): Promise<{ applied: 
     }
   }
 
+  invalidateMiniIndex();
   return { applied, errors };
 }
 
@@ -128,5 +130,6 @@ export async function ingestResyncBatch(
     }
   }
 
+  invalidateMiniIndex();
   return { applied, errors };
 }
