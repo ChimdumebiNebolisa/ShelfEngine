@@ -19,9 +19,9 @@ export default function LandingPage() {
       <section className="landing-hero" aria-label="Hero">
         <div className="landing-hero-inner">
           <div className="landing-hero-content">
-            <span className="landing-hero-badge">Privacy-first bookmark search</span>
-            <h1 className="landing-hero-headline">Local-first semantic search for your bookmarks.</h1>
-            <p className="landing-hero-subheadline">Stop losing links you know you saved. Import bookmarks once, then search by keyword or natural language, all in your browser.</p>
+            <span className="landing-hero-badge">Private bookmark search</span>
+            <h1 className="landing-hero-headline">Find what you saved. Even when you don't remember what you called it.</h1>
+            <p className="landing-hero-subheadline">Import once. Search by memory.</p>
             <div className="landing-hero-cta">
               <Link to="/import" className="btn hero2-btn-primary">
                 Import bookmarks →
@@ -31,9 +31,9 @@ export default function LandingPage() {
               </Link>
             </div>
             <div className="landing-hero-trust">
-              <span className="landing-hero-trust-item">IndexedDB storage</span>
-              <span className="landing-hero-trust-item">Embeddings in a Web Worker</span>
-              <span className="landing-hero-trust-item">No account, no server</span>
+              <span className="landing-hero-trust-item">Everything stays on your device</span>
+              <span className="landing-hero-trust-item">No account needed</span>
+              <span className="landing-hero-trust-item">Works right in your browser</span>
             </div>
           </div>
           <div className="landing-hero-preview">

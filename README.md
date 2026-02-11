@@ -1,10 +1,10 @@
 # ShelfEngine
 
-Local-first semantic search for your bookmarks.
+Find what you saved. Even when you don't remember what you called it.
 
 **[Live demo](https://shelf-engine.vercel.app/)**
 
-ShelfEngine is a **local-first web app** that lets you import your browser bookmarks once and later retrieve them using natural-language queries, search, and filters. All data stays on your device by default.
+ShelfEngine is a **local-first bookmark retrieval app** built with React + TypeScript that turns a one-time bookmarks import into fast, intent-based search. It combines lexical matching, operator-aware query parsing, and local embedding-based ranking to surface the right links from partial memory while keeping bookmark data and vectors in-browser (IndexedDB + Web Worker pipeline), with no required backend for core use.
 
 ## Preview
 
