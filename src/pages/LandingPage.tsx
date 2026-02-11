@@ -20,7 +20,7 @@ export default function LandingPage() {
         <div className="landing-hero-inner">
           <div className="landing-hero-content">
             <span className="landing-hero-badge">Privacy-first bookmark search</span>
-            <h1 className="landing-hero-headline">The search engine for your bookmarks.</h1>
+            <h1 className="landing-hero-headline">Local-first semantic search for your bookmarks.</h1>
             <p className="landing-hero-subheadline">Stop losing links you know you saved. Import bookmarks once, then search by keyword or natural language, all in your browser.</p>
             <div className="landing-hero-cta">
               <Link to="/import" className="btn hero2-btn-primary">
