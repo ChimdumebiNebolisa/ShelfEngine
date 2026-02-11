@@ -6,6 +6,12 @@ Turn your bookmarks into a search engine.
 
 ShelfEngine is a **local-first web app** that lets you import your browser bookmarks once and later retrieve them using natural-language queries, search, and filters. All data stays on your device by default.
 
+## Project Status
+
+- **Status:** Maintenance mode.
+- Core functionality is complete and usable: import, indexing, hybrid search, retrieval-only chat, and optional extension sync.
+- New feature development is limited; bug fixes and documentation updates are still welcome.
+
 ## Prerequisites
 
 - **Node.js** 18+ (for local development)
@@ -96,8 +102,11 @@ flowchart LR
 
 ## Docs
 
-- [SPEC.md](docs/SPEC.md) - Product and technical specification
-- [MILESTONES.md](docs/MILESTONES.md) - Implementation milestones (goals, key files, done criteria)
+- [ARCHITECTURE.md](ARCHITECTURE.md) - End-to-end technical architecture and manual test checklist.
+- [SPEC.md](docs/SPEC.md) - Historical MVP product and technical specification.
+- [MILESTONES.md](docs/MILESTONES.md) - Historical MVP implementation milestones.
+- [SPEC_V2.md](docs/SPEC_V2.md) - Active V2 product and technical direction.
+- [MILESTONES_V2.md](docs/MILESTONES_V2.md) - Active V2 implementation milestones.
 
 ## Development
 
