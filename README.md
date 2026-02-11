@@ -1,6 +1,6 @@
 # ShelfEngine
 
-Turn your bookmarks into a search engine.
+Local-first semantic search for your bookmarks.
 
 **[Live demo](https://shelf-engine.vercel.app/)**
 
