@@ -4,6 +4,7 @@
  */
 
 const SOURCE = 'shelfengine-extension';
+const RESYNC_CHUNK_SIZE_RESYNC = 500;
 
 console.log('[ShelfEngine] content script injected on', window.location.href);
 
@@ -21,10 +22,23 @@ window.addEventListener('message', (event) => {
         postToPage('SHELFENGINE_DELTAS', deltas);
       }
     });
+    chrome.runtime.sendMessage({ type: 'SHELFENGINE_GET_PENDING_RESYNC' }, (response) => {
+      const batch = response?.batch ?? [];
+      if (batch.length === 0) return;
+      for (let i = 0; i < batch.length; i += RESYNC_CHUNK_SIZE_RESYNC) {
+        const chunk = batch.slice(i, i + RESYNC_CHUNK_SIZE_RESYNC);
+        const lastChunk = i + RESYNC_CHUNK_SIZE_RESYNC >= batch.length;
+        postToPage('SHELFENGINE_RESYNC', { items: chunk, lastChunk });
+      }
+    });
   }
   if (event.data.type === 'SHELFENGINE_ACK') {
     const count = typeof event.data.payload === 'number' ? event.data.payload : 0;
     chrome.runtime.sendMessage({ type: 'SHELFENGINE_ACK', payload: count });
+  }
+  if (event.data.type === 'SHELFENGINE_RESYNC_ACK') {
+    const count = typeof event.data.payload === 'number' ? event.data.payload : 0;
+    chrome.runtime.sendMessage({ type: 'SHELFENGINE_RESYNC_ACK', payload: count });
   }
 });
 
@@ -32,6 +46,10 @@ chrome.runtime.onMessage.addListener(
   (msg: { type: string; payload?: unknown }, _sender: chrome.runtime.MessageSender, sendResponse: () => void) => {
     if (msg.type === 'SHELFENGINE_DELTAS' && Array.isArray(msg.payload)) {
       postToPage('SHELFENGINE_DELTAS', msg.payload);
+    }
+    if (msg.type === 'SHELFENGINE_RESYNC' && msg.payload != null && typeof msg.payload === 'object') {
+      const pl = msg.payload as { items?: unknown[]; lastChunk?: boolean };
+      postToPage('SHELFENGINE_RESYNC', pl);
     }
     sendResponse();
   }

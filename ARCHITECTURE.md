@@ -10,13 +10,13 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 | Database | `src/db/index.ts` |
 | Import | `src/import/parseBookmarksHtml.ts`, `src/import/importService.ts`, `src/import/normalizeUrl.ts` |
 | Embeddings | `src/embeddings/embeddingService.ts`, `src/workers/embedding.worker.ts` |
-| Search | `src/search/queryParse.ts`, `src/search/retrieval.ts`, `src/search/searchService.ts` |
-| Sync (extension bridge) | `src/sync/ingestDeltas.ts`, `src/App.tsx` (postMessage) |
+| Search | `src/search/queryParse.ts`, `src/search/retrieval.ts`, `src/search/miniIndex.ts`, `src/search/searchService.ts`, `src/search/searchHarness.ts` (dev-only) |
+| Sync (extension bridge) | `src/sync/ingestDeltas.ts` (ingestDeltas, ingestResyncBatch), `src/App.tsx` (postMessage) |
 | App shell | `src/App.tsx`, `src/layouts/AppLayout.tsx`, `src/layouts/LandingLayout.tsx`, `src/main.tsx` |
 | Pages | `src/pages/LandingPage.tsx`, `ImportPage.tsx`, `SearchPage.tsx`, `ChatPage.tsx` |
 | Shared UI | `src/components/SearchResultCard.tsx`, `src/index.css` |
 | Build & PWA | `vite.config.ts`, `index.html` |
-| Extension | `extension/background.ts`, `extension/contentScript.ts`, `extension/manifest.json` |
+| Extension | `extension/background.ts`, `extension/contentScript.ts`, `extension/popup.html`, `extension/manifest.json` |
 
 ---
 
@@ -105,11 +105,11 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
    | imports        |
    +-------+--------+
            ^
-           | ingestDeltas() (from extension via postMessage in App)
+           | ingestDeltas() / ingestResyncBatch() (from extension via postMessage in App)
    +-------+--------+
    | extension      |
-   | background.ts  | → contentScript.ts → window.postMessage → App
-   | contentScript  |
+   | background.ts  | ← popup.html (RESYNC_ALL, status)
+   | contentScript  | → window.postMessage → App (SHELFENGINE_DELTAS, SHELFENGINE_RESYNC)
    +----------------+
 ```
 
@@ -117,7 +117,7 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 
 - **Import:** File → `parseBookmarksHtml` → `normalizeUrl` / dedupe → `db.bookmarks` (+ `db.imports`). User then clicks “Build index” → `buildIndex()` → worker embeds text → `db.embeddings`.
 - **Search/Chat:** User query → `parseQuery()` → `embedQuery()` (worker) → `loadBookmarksAndEmbeddings()` from Dexie → `semanticTopK` (k=50) + `keywordSearchStructured` in `retrieval.ts` → merge/rank in `searchService.search()` → strong results + related fallback → results with `whyMatched`, `matchTier` → `SearchResultCard`.
-- **Extension:** Background listens to `chrome.bookmarks`; pushes deltas to queue (or sends to content script); content script posts to window; `App` receives and calls `ingestDeltas()` → Dexie + `embedSingleBookmark()` for upserts.
+- **Extension:** Background listens to `chrome.bookmarks`; pushes deltas to queue (or sends to content script). Popup offers “Open ShelfEngine” and “Resync all bookmarks”; resync crawls `chrome.bookmarks.getTree()`, flattens with folderPath, stores pending batch and/or sends in chunks (500) to open ShelfEngine tab. Content script posts `SHELFENGINE_DELTAS` and `SHELFENGINE_RESYNC` to window; `App` receives and calls `ingestDeltas()` or `ingestResyncBatch()` (Path A: URL-canonical upsert only; embed only when bookmark has no embedding). App sends `SHELFENGINE_ACK` / `SHELFENGINE_RESYNC_ACK`; background clears queue / pending resync and sets last sync time.
 
 ---
 
@@ -204,30 +204,105 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 
 ## 7) Retrieval / search
 
-### Query flow
+### Overview
 
-1. **User input** (Search or Chat): trimmed query string and optional filters.
-2. **Parse:** `parseQuery(raw)` in `queryParse.ts` extracts terms, phrases, `site:`, `folder:`, exclusions, OR groups; produces `searchText` for embedding.
-3. **Load data:** `loadBookmarksAndEmbeddings(filters)` in `searchService.ts` reads from Dexie (optionally restricted by folder, domain, or date). Builds list of bookmarks and their embeddings (by `bookmarkId`).
-4. **Query embedding:** If there are embeddings, `embedQuery(parsed.searchText)` is called (worker) to get a single query vector.
-5. **Semantic:** `semanticTopK(items, queryVector, 50)` in `retrieval.ts` computes cosine similarity of the query vector to each bookmark vector, sorts by score, returns top 50. No pre-filter; all 50 are candidates.
-6. **Keyword:**  `keywordSearchStructured(bookmarks, parsed)` tokenizes the query (≥2 chars), matches terms against title, url, folderPath, domain with weighted scores.
-7. **Merge and rank:** Candidates are the union of semantic top-50 and keyword hits. Combined score: `ALPHA * semanticScore + (1 - ALPHA) * normKeyword` (ALPHA = 0.55), plus phrase boost, junk penalty, recency boost. Results with `finalScore >= MIN_COMBINED_SCORE` (0.2) are **strong** results.
-8. **Minimum results guarantee:** If strong results < 10 and embeddings exist, fill remaining slots from semantic hits with `semanticScore >= 0.15`. Mark as `matchTier: 'related'`; strong results get `matchTier: 'strong'`. Final output capped at 10.
-7. **“Why matched”:** For each result, `buildReasons() / formatReasons()` produces a short string: keyword part (e.g. “Matches 'x' in title, folder”) and/or “Relevant to your query” for semantic. No reranking model; no generative explanation.
+Search is hybrid: lexical + semantic retrieval merged into one ranked list. Lexical retrieval uses MiniSearch over a global in-memory index built from all bookmarks in Dexie; semantic retrieval remains the existing embedding + cosine path. Query operators and filters (`site:`, `folder:`, phrases, exclude, OR, date range) are preserved.
 
-### Similarity metric and top-K
+### Data model
 
-- **Metric:** Cosine similarity (`cosineSimilarity()` in `retrieval.ts`: dot product / (norm A * norm B)). Vectors are already normalized by the model (worker uses `normalize: true`).
-- **Semantic pool:** Top 50 semantic hits are candidates; final displayed results are 10.
+Dexie schema is unchanged (`bookmarks`, `embeddings`, `imports`). MiniSearch index state is in memory only (`src/search/miniIndex.ts`) and is rebuilt from `db.bookmarks.toArray()` when cache is empty. Indexed document shape is:
 
-### Reranking and keyword boost
+- `id` (bookmark id)
+- `title`
+- `url`
+- `domain`
+- `folderPath`
 
-- No separate reranker. **Keyword overlap** is combined with semantic via fixed weight `ALPHA = 0.55` (semantic) vs `(1 - ALPHA)` (normalized keyword score). Keyword field weights: title 2, domain 1.5, folderPath 1, url 0.8 (`retrieval.ts`).
+Indexed/search fields: `title`, `domain`, `folderPath`, `url` with weighted boosts applied at query time.
 
-### “Why matched” explanation
+### Ingest paths
 
-- **Basis:** Purely from retrieval: (1) which query terms matched and in which fields (`matchedTerms`, `matchedIn` from `keywordSearchStructured`), and (2) whether the result had non-zero semantic score. Formatted as a single line by `formatReasons()` in `searchService.ts` (e.g. “Matches 'react' in title and Relevant to your query”). No LLM or generative text.
+Bookmark writes that can stale lexical search all call `invalidateMiniIndex()` once per write batch:
+
+- `runImport()` in `src/import/importService.ts` (success path, after import record update)
+- `clearAllBookmarks()` in `src/import/importService.ts` (after clear)
+- `ingestDeltas()` in `src/sync/ingestDeltas.ts` (after loop)
+- `ingestResyncBatch()` in `src/sync/ingestDeltas.ts` (after loop)
+
+This keeps writes simple while ensuring the next query rebuilds the global lexical index.
+
+### Search pipeline
+
+#### 7.1 Query parse
+
+`parseQuery(raw)` in `src/search/queryParse.ts` parses:
+
+- `site:` / `domain:`
+- `folder:`
+- quoted phrases
+- `-exclude` terms
+- `OR` groups
+
+It returns normalized tokens plus `searchText`, which feeds lexical query text and semantic embedding text.
+
+#### 7.2 Filters
+
+`loadBookmarksAndEmbeddings(filters)` in `src/search/searchService.ts` applies folder/domain/date filters first and returns:
+
+- `filteredBookmarks`
+- matching embedding rows
+
+`filteredIds` (bookmark ids from filtered bookmarks) is then used to filter MiniSearch hits so lexical candidates remain constrained by UI/query filters.
+
+#### 7.3 Lexical (MiniSearch lifecycle)
+
+`getMiniIndex()` in `src/search/miniIndex.ts`:
+
+- returns cached index when available
+- otherwise loads all bookmarks from Dexie, builds MiniSearch, caches, returns
+
+Search is one MiniSearch call per query (`parsed.searchText`) with:
+
+- `prefix: true`
+- `fuzzy: 0.15`
+- field boosts (`title: 2`, `domain: 1.5`, `folderPath: 1`, `url: 0.8`)
+
+Post-search filtering in `searchService`:
+
+- keep hits whose `bookmarkId` is in `filteredIds`
+- drop hits matching excludes via `bookmarkMatchesExclude`
+- enforce OR semantics via `bookmarkMatchesOrGroup`
+
+This preserves existing operator behavior without running MiniSearch per OR group.
+
+#### 7.4 Semantic
+
+Semantic path is unchanged:
+
+- `embedQuery(parsed.searchText)` to get query vector
+- `semanticTopK(items, queryVector, 50)` for top semantic candidates
+
+Cosine similarity implementation remains in `src/search/retrieval.ts`.
+
+#### 7.5 Merge and rank
+
+Candidates are union of lexical hits and semantic top-50. Ranking remains:
+
+- `ALPHA * semantic + (1 - ALPHA) * normalizedKeyword`
+- plus phrase boost, junk-title penalty, recency boost
+- strong vs related logic unchanged
+
+Future improvement (optional): Reciprocal Rank Fusion (RRF) can be added later as an alternative rank-combination strategy.
+
+#### 7.6 Why matched
+
+For lexical signals, `inferKeywordSignals(bookmark, parsed)` in `src/search/retrieval.ts` uses exported `termMatchesField` and `phraseMatchesField` to derive:
+
+- `matchedTerms`
+- `matchedIn`
+- `matchedPhrases`
+
+`buildReasons()` / `formatReasons()` in `src/search/searchService.ts` remain the formatter path; `url` matches map to existing reason label `site` so URL-only lexical hits still receive keyword explanations.
 
 ---
 
@@ -286,7 +361,7 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 ### Permissions
 
 - **Web app:** No special permissions; standard storage (IndexedDB) and Web Worker. Optional network for first load and model fetch.
-- **Chrome extension** (when installed): `bookmarks` and `storage` in manifest; `host_permissions` for localhost (and 127.0.0.1) only in the repo, so the extension is intended for development/same-machine use.
+- **Chrome extension** (when installed): `bookmarks`, `storage`, `tabs` in manifest; `host_permissions` for `http://localhost/*`, `http://127.0.0.1/*`, and `https://shelf-engine.vercel.app/*`. Content script runs on those origins only. Extension is usable in development (localhost) and against the production app (shelf-engine.vercel.app).
 
 ### Threat model assumptions
 
@@ -303,14 +378,15 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 ### Manual test checklist (core flows)
 
 - **Import:** Upload a Chrome `bookmarks.html`; choose Merge then Replace; confirm counts and no duplicates on second merge. Try “Try sample bookmarks.”
-- **Index:** After import, “Build index”; confirm progress bar and “Indexed” count; verify no main-thread freeze.
-- **Search:** Enter keyword and natural-language query; check results and “why matched”; try filters (folder, domain, date).
-- **Chat:** Send a query; confirm same style results and explanations; try prefill from landing chips.
+- **Index:** After import, run “Build index”; confirm progress bar and “Indexed” count; verify no main-thread freeze during embedding.
+- **Search:** Run keyword, phrase, and natural-language queries; validate filters (folder/domain/date) and query operators (`site:`, `folder:`); confirm “why matched” is accurate.
+- **Chat:** Send a query; confirm retrieval-only behavior (no generative reply text), with bookmark cards and explanations using the same search pipeline.
+- **Lexical / MiniSearch:** Verify keyword-only path by searching with empty embeddings and confirming useful results + reasons; optionally run `window.runSearchHarness()` in dev console to sanity-check sample queries.
 - **Offline:** With devtools “Offline”, reload after one load; confirm search/import/index still work; confirm sample bookmarks only if cached.
 
 ### Known limitations
 
-- No automated tests. Large imports (e.g. many thousands of bookmarks) may exceed the 60 s target or memory. Extension host_permissions are localhost-only. Single embedding model; no model selection in UI. Chat does not keep multi-turn context for retrieval (each message is independent).
+- No automated tests. Large imports (e.g. many thousands of bookmarks) may exceed the 60 s target or memory. Single embedding model; no model selection in UI. Chat does not keep multi-turn context for retrieval (each message is independent).
 
 ---
 
@@ -321,13 +397,11 @@ This document describes how ShelfEngine works end-to-end as implemented in the r
 ### Implemented in repo today
 
 - **M1–M5** are implemented: PWA shell, Dexie schema, import (merge/replace), parsing, folder path, import tracking, Web Worker embeddings, search with filters and “why matched,” Chat UI over the same search.
-- **M6 (Chrome Extension)** bridge is **implemented**: `extension/background.ts` (bookmark listeners, delta queue in `chrome.storage.local`, send to tabs); `extension/contentScript.ts` (ShelfEngine origin only, postMessage to page, SHELFENGINE_READY → get queue, SHELFENGINE_ACK → clear queue); `src/App.tsx` (listens for `SHELFENGINE_DELTAS`, calls `ingestDeltas()`, posts `SHELFENGINE_ACK`); `src/sync/ingestDeltas.ts` (upsert/remove to Dexie, `embedSingleBookmark()` for upserts). So **extension sync when the app is open, and queue + flush on next open, are implemented.** The extension is built from `extension/background.ts` and `contentScript.ts` (e.g. `npm run build:extension`); manifest has host_permissions for localhost only.
+- **M6 (Chrome Extension)** bridge is **implemented**: `extension/background.ts` (bookmark listeners, delta queue in `chrome.storage.local`, send to tabs; RESYNC_ALL: `getTree()` → flatten with folderPath, URL-normalized; pending resync batch stored and sent in chunks of 500; GET_PENDING_RESYNC, RESYNC_ACK, last sync time); `extension/contentScript.ts` (ShelfEngine origin only, postMessage to page; SHELFENGINE_READY → get queue and pending resync, forward SHELFENGINE_DELTAS and SHELFENGINE_RESYNC chunks; SHELFENGINE_ACK / SHELFENGINE_RESYNC_ACK to background); `extension/popup.html` (Open ShelfEngine, Resync all bookmarks, status: Connected, Queue, Pending resync, Last sync); `src/App.tsx` (listens for `SHELFENGINE_DELTAS` and `SHELFENGINE_RESYNC`, calls `ingestDeltas()` or `ingestResyncBatch()`, posts ACKs); `src/sync/ingestDeltas.ts` (deltas: upsert/remove, `embedSingleBookmark()` for upserts; resync: `ingestResyncBatch()` — Path A URL-canonical upsert only, embed only when bookmark has no embedding). **Production origin** is enabled: manifest `host_permissions` and content_scripts include `https://shelf-engine.vercel.app/*` alongside localhost. Build: `npm run build:extension`; load unpacked from `extension` folder.
 
 ### Not implemented / optional / deferred
 
 - **OAuth / login:** Not implemented; SPEC defers optional Google OAuth for backup or multi-device to later.
-- **Production host for extension:** Manifest only allows localhost; extending to a production ShelfEngine origin would require adding that origin to `host_permissions` and building/releasing the extension.
-- **Full initial sync from extension:** The extension currently pushes deltas on create/change/move/remove; a one-time “sync all bookmarks” from Chrome into the app could be added but is not required by the current milestone.
 - **Backend, collaboration, mobile app, page-content fetching:** All out of scope per SPEC and GUARDRAILS.
 
 ---

@@ -114,6 +114,16 @@ Build for production:
 npm run build
 ```
 
+### Search harness (dev-only)
+
+Run the app in dev mode, open the browser console, and call:
+
+```js
+window.runSearchHarness()
+```
+
+This runs a small set of sample queries through `search()` and logs the top results (title, url, score, whyMatched).
+
 ### Load unpacked extension (dev)
 
 1. Run the extension build:
@@ -126,6 +136,15 @@ npm run build
 5. The extension card should appear with no errors. Click the **Service worker** link under “Inspect views” to open the background script console and see logs (e.g. when you create or change a bookmark).
 
 The extension runs on `localhost`, `127.0.0.1`, and `https://shelf-engine.vercel.app`. When the ShelfEngine app is open in a tab, bookmark changes are synced into the app; when it’s closed, deltas are queued and applied on next open.
+
+**Verification steps**
+
+1. `npm run build:extension`
+2. Load unpacked from the **`extension`** folder in Chrome (`chrome://extensions` → Developer mode → Load unpacked).
+3. Open **https://shelf-engine.vercel.app** in a tab.
+4. Click the extension icon, then **Resync all bookmarks**. Confirm bookmarks appear in the app (Search or Import view).
+5. Close the app tab, click **Resync all bookmarks** again, then reopen **https://shelf-engine.vercel.app**. Confirm the queued resync flushes and applies (bookmarks show up).
+6. Confirm the extension runs on both production origin (`https://shelf-engine.vercel.app`) and localhost (content script logs in the page console; service worker logs under the extension’s “Service worker” link).
 
 See [MILESTONES.md](docs/MILESTONES.md) for the full implementation plan and dependency order.
 

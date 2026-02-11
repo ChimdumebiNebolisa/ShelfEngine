@@ -7,7 +7,15 @@ import { db } from '../db';
 import type { Bookmark } from '../db';
 import { embedQuery } from '../embeddings/embeddingService';
 import { parseQuery } from './queryParse';
-import { semanticTopK, keywordSearchStructured, isJunkTitle, isRecent } from './retrieval';
+import { getMiniIndex, MINI_SEARCH_OPTIONS } from './miniIndex';
+import {
+  semanticTopK,
+  isJunkTitle,
+  isRecent,
+  inferKeywordSignals,
+  bookmarkMatchesExclude,
+  bookmarkMatchesOrGroup,
+} from './retrieval';
 import type { KeywordHit, MatchedIn } from './retrieval';
 
 export type { ParsedQuery } from './queryParse';
@@ -19,7 +27,6 @@ const PHRASE_BOOST_CAP = 0.2;
 const PHRASE_BOOST_PER = 0.07;
 const JUNK_TITLE_PENALTY = 0.15;
 const RECENCY_BOOST_CAP = 0.05;
-const RECENCY_DAYS = 7;
 
 export type DateRangeFilter = 'any' | '7d' | '30d';
 
@@ -104,10 +111,10 @@ function buildReasons(keywordHit: KeywordHit | undefined, hasSemantic: boolean):
     }
   }
   if (reasons.length < 2 && keywordHit?.matchedTerms?.length && keywordHit.matchedIn.length > 0) {
-    const fieldMap: MatchedIn[] = ['title', 'folderPath', 'domain'];
+    const fieldMap: MatchedIn[] = ['title', 'folderPath', 'domain', 'url'];
     for (const f of fieldMap) {
       if (keywordHit.matchedIn.includes(f) && reasons.length < 2) {
-        const field = f === 'folderPath' ? 'folder' : f === 'domain' ? 'site' : 'title';
+        const field = f === 'folderPath' ? 'folder' : f === 'title' ? 'title' : 'site';
         reasons.push({ type: 'keyword', field, terms: keywordHit.matchedTerms });
         break;
       }
@@ -163,26 +170,49 @@ export async function search(
     }));
   }
 
-  const filteredIds = new Set(filteredBookmarks.map((b) => b.id).filter((id): id is number => id != null));
-
   const embeddingByBookmarkId = new Map(
     embeddingsList.map((e) => [e.bookmarkId, e] as const)
   );
   const bookmarkById = new Map(
     filteredBookmarks.filter((b) => b.id != null).map((b) => [b.id!, b] as const)
   );
+  const filteredIds = new Set(bookmarkById.keys());
+
+  const mini = await getMiniIndex();
+  const rawMiniHits = parsed.searchText.trim()
+    ? mini.search(parsed.searchText, MINI_SEARCH_OPTIONS)
+    : [];
+  const keywordHits: KeywordHit[] = [];
+  for (const hit of rawMiniHits) {
+    const bookmarkId = typeof hit.id === 'number' ? hit.id : Number(hit.id);
+    if (!Number.isFinite(bookmarkId) || !filteredIds.has(bookmarkId)) continue;
+    const bookmark = bookmarkById.get(bookmarkId);
+    if (!bookmark) continue;
+    if (bookmarkMatchesExclude(bookmark, parsed.excludeTerms)) continue;
+    if (
+      parsed.orGroups.length > 1 &&
+      !parsed.orGroups.some((group) => bookmarkMatchesOrGroup(bookmark, group))
+    ) {
+      continue;
+    }
+    keywordHits.push({
+      bookmarkId,
+      score: hit.score ?? 0,
+      ...inferKeywordSignals(bookmark, parsed),
+    });
+  }
 
   const semanticItems = Array.from(embeddingByBookmarkId.entries()).map(
     ([bookmarkId, e]) => ({ bookmarkId, vector: e.vector })
   );
 
   if (semanticItems.length === 0) {
-    const keywordHits = keywordSearchStructured(filteredBookmarks, parsed);
     const maxKw = keywordHits.length > 0 ? Math.max(...keywordHits.map((kh) => kh.score), 1) : 1;
     const queryTokens = parsed.terms.length + parsed.phrases.length;
-    return keywordHits.slice(0, 10).map((kh) => {
+    const keywordOnlyResults: SearchResult[] = [];
+    for (const kh of keywordHits.slice(0, 10)) {
       const b = bookmarkById.get(kh.bookmarkId);
-      if (!b) return null;
+      if (!b) continue;
       const semantic = 0;
       const keyword = Math.min(1, (kh.score ?? 0) / maxKw);
       const phraseCount = kh.matchedPhrases?.length ?? 0;
@@ -192,19 +222,19 @@ export async function search(
       const raw = ALPHA * semantic + (1 - ALPHA) * keyword + phraseBoost - junkPenalty + recencyBoost;
       const finalScore = Math.max(0, Math.min(1, raw));
       const reasons = buildReasons(kh, false);
-      return {
+      keywordOnlyResults.push({
         bookmark: b,
         score: finalScore,
         whyMatched: formatReasons(reasons),
         reasons,
         matchedTerms: kh.matchedTerms?.length ? kh.matchedTerms : undefined,
-      };
-    }).filter((r): r is SearchResult => r != null);
+      });
+    }
+    return keywordOnlyResults;
   }
 
   const queryVector = await embedQuery(parsed.searchText || ' ');
   const semanticHitsRaw = semanticTopK(semanticItems, queryVector, 50);
-  const keywordHits = keywordSearchStructured(filteredBookmarks, parsed);
   const keywordByBookmarkId = new Map(keywordHits.map((kh) => [kh.bookmarkId, kh]));
   const semanticByBookmarkId = new Map(semanticHitsRaw.map((s) => [s.bookmarkId, s.score]));
 
