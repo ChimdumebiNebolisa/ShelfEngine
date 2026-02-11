@@ -20,7 +20,7 @@ export default function LandingPage() {
         <div className="landing-hero-inner">
           <div className="landing-hero-content">
             <span className="landing-hero-badge">Private bookmark search</span>
-            <h1 className="landing-hero-headline">Find what you saved. Even when you don't remember what you called it.</h1>
+            <h1 className="landing-hero-headline">Find what you saved. Even when you don't remember what its called</h1>
             <p className="landing-hero-subheadline">Import once. Search by memory.</p>
             <div className="landing-hero-cta">
               <Link to="/import" className="btn hero2-btn-primary">

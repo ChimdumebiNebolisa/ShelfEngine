@@ -1,6 +1,6 @@
 # ShelfEngine
 
-Find what you saved. Even when you don't remember what you called it.
+Find what you saved. Even when you don't remember what its called
 
 **[Live demo](https://shelf-engine.vercel.app/)**
 
