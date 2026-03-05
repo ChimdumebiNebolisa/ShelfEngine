@@ -50,7 +50,7 @@ export async function runImport(
 
     for (const p of parsed) {
       const url = normalizeUrl(p.url);
-      if (mode === 'merge' && existingUrls.has(url)) {
+      if (existingUrls.has(url)) {
         counts.skipped++;
         continue;
       }
@@ -65,7 +65,7 @@ export async function runImport(
           createdAt,
         });
         counts.added++;
-        if (mode === 'merge') existingUrls.add(url);
+        existingUrls.add(url);
       } catch (err) {
         counts.failed++;
       }
