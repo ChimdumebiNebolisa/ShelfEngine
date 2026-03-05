@@ -3,7 +3,7 @@
 These are non-negotiable rules for every change.
 
 ## Scope and product rules
-- Do not modify docs/SPEC.md.
+- Do not modify docs/SPEC.md (historical). Active spec: docs/SPEC_V2.md.
 - Local-first by default. All bookmark data and embeddings stay in the browser.
 - No backend required for MVP. Do not add servers, APIs, or databases.
 - No login required for core usage. If auth is added later, it must be optional and only for backup.
@@ -25,7 +25,7 @@ These are non-negotiable rules for every change.
 - Store data using Dexie and IndexedDB only.
 
 ## Milestone discipline
-- Follow docs/MILESTONES.md ordering unless explicitly told otherwise.
+- Follow docs/MILESTONES_V2.md ordering unless explicitly told otherwise.
 - Each milestone must ship a demoable, working state.
 - No "nice to have" work inside a milestone.
 

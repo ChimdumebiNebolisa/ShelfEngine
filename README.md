@@ -145,6 +145,8 @@ This runs a small set of sample queries through `search()` and logs the top resu
 
 ### Load unpacked extension (dev)
 
+**Note:** Extension `.js` files are built from TypeScript and not committed. You must run `npm run build:extension` before loading the extension.
+
 1. Run the extension build:
    ```bash
    npm run build:extension
@@ -165,7 +167,7 @@ The extension runs on `localhost`, `127.0.0.1`, and `https://shelf-engine.vercel
 5. Close the app tab, click **Resync all bookmarks** again, then reopen **https://shelf-engine.vercel.app**. Confirm the queued resync flushes and applies (bookmarks show up).
 6. Confirm the extension runs on both production origin (`https://shelf-engine.vercel.app`) and localhost (content script logs in the page console; service worker logs under the extension’s “Service worker” link).
 
-See [MILESTONES.md](docs/MILESTONES.md) for the full implementation plan and dependency order.
+See [MILESTONES_V2.md](docs/MILESTONES_V2.md) for the full implementation plan and dependency order.
 
 ## License
 

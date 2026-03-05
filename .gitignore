@@ -1,3 +1,7 @@
 node_modules
 dist
 .cursor
+
+# Extension build artifacts (run `npm run build:extension` to generate)
+extension/background.js
+extension/contentScript.js
