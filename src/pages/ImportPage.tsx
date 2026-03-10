@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { runImport, clearAllBookmarks, type ImportMode } from '../import/importService';
 import { buildIndex, getEmbeddingStats } from '../embeddings/embeddingService';
+import { db } from '../db';
+import type { ExportBookmark } from '../import/exportBookmarks';
+import ExportBookmarksModal from '../components/ExportBookmarksModal';
 
 export default function ImportPage() {
   const [mode, setMode] = useState<ImportMode>('merge');
@@ -17,7 +20,17 @@ export default function ImportPage() {
   const [dropZoneHover, setDropZoneHover] = useState(false);
   const [removeConfirmValue, setRemoveConfirmValue] = useState('');
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportBookmarks, setExportBookmarks] = useState<ExportBookmark[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleOpenExportModal() {
+    const list = await db.bookmarks.toArray();
+    setExportBookmarks(
+      list.map((b) => ({ url: b.url, title: b.title, folderPath: b.folderPath, addDate: b.addDate }))
+    );
+    setShowExportModal(true);
+  }
 
   function refreshStats() {
     getEmbeddingStats().then(setStats);
@@ -239,6 +252,14 @@ export default function ImportPage() {
             >
               {indexing ? 'Indexing…' : 'Build index'}
             </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleOpenExportModal}
+              disabled={importing || indexing || clearing}
+            >
+              Export bookmarks
+            </button>
             {!showRemoveConfirm ? (
               <button
                 type="button"
@@ -295,6 +316,12 @@ export default function ImportPage() {
           )}
         </div>
       )}
+
+      <ExportBookmarksModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        bookmarks={exportBookmarks}
+      />
     </div>
   );
 }
